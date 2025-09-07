@@ -1,7 +1,7 @@
 use bytes::{Bytes, BytesMut};
 
 use pyo3::prelude::*;
-use splinter_rs::{Splinter, PartitionRead, PartitionWrite, Encodable, SplinterRef};
+use splinter_rs::{Splinter, Encodable};
 
 #[derive(Clone)]
 pub enum SplinterType {
@@ -58,7 +58,7 @@ impl SplinterWrapper {
     /// assumption that the contents of each dimension are the same size, like a matrix, not like a
     /// random collection of splinters of different sizes.
     /// Maybe we want to create a different wrapper type for grids of splinters
-    pub fn shape(&self) -> (usize) {
+    pub fn shape(&self) -> usize {
         
         0
     }
@@ -69,7 +69,7 @@ impl SplinterWrapper {
     /// parallel, then only optimize once at the very end
     pub fn merge(&mut self, _rhs: Self) {}
 
-    pub fn merge_many(&mut self, rhs: &[Self]) {}
+    pub fn merge_many(&mut self, _rhs: &[Self]) {}
 
         // maybe additional support to allow `foo = merge([bar, bla, glorb])` in addition to
     // `foo.merge([bar, bla, glorb])`??
@@ -158,7 +158,7 @@ impl SplinterWrapper {
         Ok(result.freeze())
     }
 
-    pub fn xor(&self, rhs: Self) {}
+    pub fn xor(&self, _rhs: Self) {}
 }
 
 // the splinters crate itself doesn't seem to provide native support for bitwise operations
