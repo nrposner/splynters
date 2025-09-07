@@ -16,6 +16,7 @@ splinter-rs = "0.5.4"
 
 [dev-dependencies]
 criterion = "0.7.0"
+rand = "0.8"
 
 [[bench]]
 name = "benches" 

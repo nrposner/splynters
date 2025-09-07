@@ -1,38 +1,56 @@
-
-use std::hint::black_box;
 use bytes::Bytes;
 use criterion::{criterion_group, criterion_main, Criterion};
 
+use splynters::SplinterWrapper;
 
-use splynters::*;
-
-
-
+use rand::{Rng, thread_rng};
 
 
+
+
+fn generate_random_splinter_wrapper(size: usize) -> SplinterWrapper {
+    let mut rng = thread_rng();
+    let bytes: Bytes = (0..size).map(|_| rng.gen::<u8>()).collect::<Vec<u8>>().into();
+    SplinterWrapper::new(bytes)
+}
 
 fn run_splynters_benchmarks(c: &mut Criterion) {
-    c.bench_function("find_5_distributions_with_setup", |b| {
-        b.iter(|| {
+    let mut group = c.benchmark_group("SplinterWrapper And Operations");
 
+    for size in [1024, 10 * 1024, 100 * 1024].iter() { // 1KB, 10KB, 100KB
+        group.throughput(criterion::Throughput::Bytes(*size as u64));
 
+        // Benchmark for and_simple
+        group.bench_with_input(criterion::BenchmarkId::new("and_simple", size), size, |b, &size| {
+            b.iter_batched(
+                || {
+                    let s1 = generate_random_splinter_wrapper(size);
+                    let s2 = generate_random_splinter_wrapper(size);
+                    (s1, s2)
+                },
+                |(mut s1, s2)| {
+                    s1.and_simple(s2).unwrap()
+                },
+                criterion::BatchSize::SmallInput,
+            );
+        });
 
-
-
-            // let params = set_parameters(4.77, 3.2031, 100, 0, 10, None, None, 1, None, RestrictionsOption::Default, false).unwrap();
-            //
-            // let mut rng = StdRng::seed_from_u64(42);
-            //
-            // find_possible_distributions(
-            //     black_box(&params), 
-            //     black_box(5), 
-            //     black_box(false), 
-            //     &mut rng
-            // )
-
-
-        })
-    });
+        // Benchmark for and_chunked
+        group.bench_with_input(criterion::BenchmarkId::new("and_chunked", size), size, |b, &size| {
+            b.iter_batched(
+                || {
+                    let s1 = generate_random_splinter_wrapper(size);
+                    let s2 = generate_random_splinter_wrapper(size);
+                    (s1, s2)
+                },
+                |(mut s1, s2)| {
+                    s1.and_chunked(s2).unwrap()
+                },
+                criterion::BatchSize::SmallInput,
+            );
+        });
+    }
+    group.finish();
 }
 
 
@@ -50,10 +68,6 @@ criterion_main!(benches);
 //     println!("Bytes 1:          {:08b}", bytes1.as_ref());
 //     println!("Bytes 2:          {:08b}", bytes2.as_ref());
 //     println!("------------------------------------------------------------------------------------------");
-//
-//
-//
-//
 //
 //
 //     // // --- Simple AND ---

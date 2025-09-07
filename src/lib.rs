@@ -3,7 +3,8 @@ use bytes::{Bytes, BytesMut};
 use pyo3::prelude::*;
 use splinter_rs::{Splinter, PartitionRead, PartitionWrite, Encodable, SplinterRef};
 
-enum SplinterType {
+#[derive(Clone)]
+pub enum SplinterType {
     Splinter,
     SplinterRef,
     CowSplinter,
@@ -12,14 +13,22 @@ enum SplinterType {
 /// A wrapper for higher-order functionality over the Splinter 
 /// crate
 #[pyclass]
-struct SplinterWrapper {
-    splinter_type: SplinterType,
-    splinter: Splinter,
+#[derive(Clone)]
+pub struct SplinterWrapper {
+    pub splinter_type: SplinterType,
+    pub splinter: Splinter,
 
 }
 
 
 impl SplinterWrapper {
+    pub fn new(bytes: Bytes) -> Self {
+        SplinterWrapper {
+            splinter_type: SplinterType::Splinter,
+            splinter: Splinter::from_iter(bytes.chunks_exact(4).map(|chunk| u32::from_ne_bytes(chunk.try_into().unwrap()))),
+        }
+    }
+
     /// want to mutate the contained splinter type, from a Splinter to a SplinterRef
     /// and return a boolean to tell us it was done correctly? the underlying operation can't fail,
     /// but we could call it when there is already a SplinterRef: maybe we don't return a bool,
@@ -51,14 +60,14 @@ impl SplinterWrapper {
     /// Maybe we want to create a different wrapper type for grids of splinters
     pub fn shape(&self) -> (usize) {
         
-        (0)
+        0
     }
 
     /// a higher-order wrapper for merging two splinter wrappers
     /// maybe we even want to provide support for merging larger numbers of splinters from an
     /// iterator: maybe this is a parallelism use case, group them up and do a few of the merges in
     /// parallel, then only optimize once at the very end
-    pub fn merge(&mut self, rhs: Self) {}
+    pub fn merge(&mut self, _rhs: Self) {}
 
     pub fn merge_many(&mut self, rhs: &[Self]) {}
 
