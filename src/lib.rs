@@ -1,4 +1,5 @@
 use pyo3::{exceptions::PyValueError, prelude::*, types::{PyBytes, PyType}};
+use rayon::prelude::*;
 use splinter_rs::{Cut, Encodable, Merge, Optimizable, PartitionRead, PartitionWrite, Splinter, SplinterRef};
 
 #[derive(Clone)]
@@ -91,6 +92,27 @@ impl SplinterWrapper {
             ))
         }
     }
+
+    pub fn contains_many_parallel(
+        &self, 
+        values: &Bound<PyAny>
+    ) -> PyResult<Vec<bool>> {
+        if let Ok(vals) = values.extract::<Vec<u32>>() {
+            let res = vals
+                .par_iter()
+                .map(|&val| self.0.contains(val))
+                .collect();
+            Ok(res)
+        } else {
+            Err(pyo3::exceptions::PyTypeError::new_err(
+                format!(
+                    "contains_many_parallel() argument must be a list of integers, but received an object of type {:#?}", 
+                    values.get_type().name()?
+                )
+            ))
+        }
+    }
+
     /// Implements the Python 'in' operator for checking a single value.
     ///
     /// This allows for pythonic checks like `if 5 in splinter:`.
