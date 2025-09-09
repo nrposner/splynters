@@ -119,34 +119,26 @@ impl SplinterWrapper {
     }
     
     // mimicking python's syntax for sets, instead of lists
-    //
 
-    pub fn add_single(&mut self, value: u32) -> bool {
-        // saving and outputting the bool, since the user may want to know
-        // whether the operation was successful
-        let res = self.splinter.insert(value);
-        // should we be optimizing after individual inserts?
-        // no, probably not. We will probably end up optimizing 
-        // before costly read operations anyway??
-        // leaving this in for the time being
-        self.splinter.optimize();
-        res
+    pub fn add(&mut self, values: &Bound<PyAny>) -> PyResult<()> {
+
+        if let Ok(val) = values.extract::<u32>() {
+            self.splinter.insert(val);
+            Ok(())
+        } else if let Ok(vals) = values.extract::<Vec<u32>>() {
+            vals.iter().for_each(|val| {
+                self.splinter.insert(*val);
+            });
+            Ok(())
+        } else {
+            Err(pyo3::exceptions::PyTypeError::new_err(
+                format!(
+                    "discard() argument must be an integer or a list of integers, but received an object of type {:#?}", 
+                    values.get_type().name()?
+                )
+            ))
+        }
     }
-
-    pub fn add_many(&mut self, values: Vec<u32>) -> Vec<bool> {
-        let res = values.iter().map(|value| {
-            self.splinter.insert(*value)
-        }).collect();
-        // optimize after a batch insert
-        // doesn't seem to be a different build-in way to do multiple insert, just looping through?
-        // could this be multithreaded?
-        self.splinter.optimize();
-        res
-    }
-
-
-
-
 
     pub fn remove(&mut self, value: &Bound<PyAny>) -> PyResult<()> {
         if let Ok(single_val) = value.extract::<u32>() {
@@ -269,8 +261,19 @@ impl SplinterWrapper {
         }
     }
 
+    pub fn select(&self, value: &Bound<PyAny>) -> PyResult<Option<u32>> {
+        if let Ok(val) = value.extract::<usize>() {
+            Ok(self.splinter.select(val))
+        } else {
+            Err(pyo3::exceptions::PyTypeError::new_err(
+                format!(
+                    "select() argument must be an unsigned integer, but received an object of type {:#?}",
+                    value.get_type().name()?
+                )
+            ))
+        }
+    }
 
-    // then also rank
     // select() may be useful as well??
 }
 
