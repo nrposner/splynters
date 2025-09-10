@@ -1,6 +1,6 @@
 use std::vec;
 
-use pyo3::{exceptions::PyValueError, prelude::*, types::{PyBytes, PyType}};
+use pyo3::{exceptions::PyValueError, prelude::*, types::{PyBytes, PyTuple, PyType}};
 use rayon::prelude::*;
 use splinter_rs::{Cut, Encodable, Optimizable, PartitionRead, PartitionWrite, Splinter, SplinterRef};
 
@@ -291,21 +291,21 @@ impl SplinterWrapper {
     // operators (via dunder class methods)
     // this implementation should accomplish the goal without intermediate copying, 
     // but check with Carl
-    fn __and__(&self, rhs: Self) -> Self { Self(&self.0 & &rhs.0) }
-    fn __or__(&self, rhs: Self) -> Self { Self(&self.0 | &rhs.0) }
-    fn __xor__(&self, rhs: Self) -> Self { Self(&self.0 ^ &rhs.0) }
-    fn __sub__(&self, rhs: Self) -> Self { Self(&self.0 - &rhs.0) }
+    fn __and__(&self, rhs: &Self) -> Self { Self(&self.0 & &rhs.0) }
+    fn __or__(&self, rhs: &Self) -> Self { Self(&self.0 | &rhs.0) }
+    fn __xor__(&self, rhs: &Self) -> Self { Self(&self.0 ^ &rhs.0) }
+    fn __sub__(&self, rhs: &Self) -> Self { Self(&self.0 - &rhs.0) }
 
     // are these redundant? implement them anyway
-    fn __rand__(&self, rhs: Self) -> Self { Self(&self.0 & &rhs.0) }
-    fn __ror__(&self, rhs: Self) -> Self { Self(&self.0 | &rhs.0) }
-    fn __rxor__(&self, rhs: Self) -> Self { Self(&self.0 ^ &rhs.0) }
-    fn __rsub__(&self, rhs: Self) -> Self { Self(&self.0 - &rhs.0) }
+    fn __rand__(&self, rhs: &Self) -> Self { Self(&self.0 & &rhs.0) }
+    fn __ror__(&self, rhs: &Self) -> Self { Self(&self.0 | &rhs.0) }
+    fn __rxor__(&self, rhs: &Self) -> Self { Self(&self.0 ^ &rhs.0) }
+    fn __rsub__(&self, rhs: &Self) -> Self { Self(&self.0 - &rhs.0) }
 
-    fn __iand__(&mut self, rhs: Self) { self.0 &= &rhs.0 }
-    fn __ior__(&mut self, rhs: Self) { self.0 |= &rhs.0 }
-    fn __ixor__(&mut self, rhs: Self) { self.0 ^= &rhs.0 }
-    fn __isub__(&mut self, rhs: Self) { self.0 -= &rhs.0 }
+    fn __iand__(&mut self, rhs: &Self) { self.0 &= &rhs.0 }
+    fn __ior__(&mut self, rhs: &Self) { self.0 |= &rhs.0 }
+    fn __ixor__(&mut self, rhs: &Self) { self.0 ^= &rhs.0 }
+    fn __isub__(&mut self, rhs: &Self) { self.0 -= &rhs.0 }
     
     fn __iter__(&self) -> SplinterIter {
         SplinterIter {
@@ -335,6 +335,36 @@ impl SplinterWrapper {
 
         self.0 = new_splinter;
         Ok(())
+    }
+
+    // copy protocol
+    fn copy(&self) -> Self { self.clone() }
+    // making it easily available from python
+    fn __copy__(&self) -> Self { self.clone() }
+
+
+    // explicit set methods
+    // omitting the usual snake_case _ to more closely fit the Python idiom
+    fn isdisjoint(&self, rhs: &Self) -> bool { (&self.0 & &rhs.0).is_empty() }
+    fn issubset(&self, rhs: &Self) -> bool { self.__le__(rhs) }
+    fn issuperset(&self, rhs: &Self) -> bool { self.__ge__(rhs) }
+    #[pyo3(signature = (*rhs))]
+    fn union(&self, rhs: &Bound<PyTuple>) -> PyResult<Self> {
+        let mut result = self.0.clone();
+        for other in rhs.iter() {
+            let other_splinter = other.extract::<PyRef<Self>>()?;
+            result |= &other_splinter.0;
+        }
+        Ok(Self(result))
+    }
+    #[pyo3(signature = (*rhs))]
+    fn intersection(&self, rhs: &Bound<PyTuple>) -> PyResult<Self> { 
+        let mut result = self.0.clone();
+        for other in rhs.iter() {
+            let other_splinter = other.extract::<PyRef<Self>>()?;
+            result &= &other_splinter.0;
+        }
+        Ok(Self(result))
     }
 }
 
