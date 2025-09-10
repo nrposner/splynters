@@ -1,3 +1,5 @@
+use std::vec;
+
 use pyo3::{exceptions::PyValueError, prelude::*, types::{PyBytes, PyType}};
 use rayon::prelude::*;
 use splinter_rs::{Cut, Encodable, Optimizable, PartitionRead, PartitionWrite, Splinter, SplinterRef};
@@ -31,7 +33,7 @@ impl SplinterWrapper {
 
         Self(splinter)
     }
-    pub fn to_list(&self) -> Vec<u32> { self.0.iter().collect::<Vec<u32>>() }
+    pub fn to_list(&self) -> Vec<u32> { self.0.iter().collect() }
 
     pub fn to_bytes(&mut self, py: Python) -> PyResult<Py<PyBytes>> {
         // optimize before serializing
@@ -304,10 +306,27 @@ impl SplinterWrapper {
     pub fn __ior__(&mut self, rhs: Self) { self.0 |= &rhs.0 }
     pub fn __ixor__(&mut self, rhs: Self) { self.0 ^= &rhs.0 }
     pub fn __isub__(&mut self, rhs: Self) { self.0 -= &rhs.0 }
-    // interesting, sub but not add, I wonder why not
     
-    // next a to_list, 
-    // and also a __iter__ implementation to return the decomepressed u32 values one at at a time
+    fn __iter__(&self) -> SplinterIter {
+        SplinterIter {
+            inner: self.0.iter().collect::<Vec<u32>>().into_iter(),
+        }
+    }
+}
+
+#[pyclass(name = "SplinterIter")]
+struct SplinterIter {
+    inner: vec::IntoIter<u32>
+}
+
+#[pymethods]
+impl SplinterIter {
+    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+    fn __next__(mut slf: PyRefMut<'_, Self>) -> Option<u32> {
+        slf.inner.next()
+    }
 }
 
 // pain in my goddamn ass new patch notes deprecating into_py making me define a return enum for
@@ -323,5 +342,6 @@ pub enum BoolOrVec {
 #[pymodule]
 fn splynters(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<SplinterWrapper>()?;
+    m.add_class::<SplinterIter>()?;
     Ok(())
 }
