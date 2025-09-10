@@ -41,6 +41,9 @@ impl SplinterWrapper {
     pub fn __len__(&self) -> usize {
         self.0.cardinality()
     }
+    pub fn __sizeof__(&self) -> usize {
+        self.0.encoded_size()
+    }
     pub fn __repr__(&self) -> String {
         let s = format!("SplinterWrapper(len = {}, compressed_byte_size = {})", self.0.cardinality(), self.0.encoded_size());
         s
