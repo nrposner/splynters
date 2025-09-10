@@ -35,12 +35,12 @@ impl SplinterWrapper {
     }
     pub fn to_list(&self) -> Vec<u32> { self.0.iter().collect() }
 
-    pub fn to_bytes(&mut self, py: Python) -> PyResult<Py<PyBytes>> {
+    pub fn to_bytes(&mut self, py: Python) ->Py<PyBytes> {
         // optimize before serializing
         self.0.optimize();
         let bytes = self.0.encode_to_splinter_ref().into_inner();
         let py_bytes = PyBytes::new(py, &bytes);
-        Ok( py_bytes.into() )
+        py_bytes.into()
     }
     pub fn __len__(&self) -> usize {
         self.0.cardinality()
@@ -291,26 +291,50 @@ impl SplinterWrapper {
     // operators (via dunder class methods)
     // this implementation should accomplish the goal without intermediate copying, 
     // but check with Carl
-    pub fn __and__(&self, rhs: Self) -> Self { Self(&self.0 & &rhs.0) }
-    pub fn __or__(&self, rhs: Self) -> Self { Self(&self.0 | &rhs.0) }
-    pub fn __xor__(&self, rhs: Self) -> Self { Self(&self.0 ^ &rhs.0) }
-    pub fn __sub__(&self, rhs: Self) -> Self { Self(&self.0 - &rhs.0) }
+    fn __and__(&self, rhs: Self) -> Self { Self(&self.0 & &rhs.0) }
+    fn __or__(&self, rhs: Self) -> Self { Self(&self.0 | &rhs.0) }
+    fn __xor__(&self, rhs: Self) -> Self { Self(&self.0 ^ &rhs.0) }
+    fn __sub__(&self, rhs: Self) -> Self { Self(&self.0 - &rhs.0) }
 
     // are these redundant? implement them anyway
-    pub fn __rand__(&self, rhs: Self) -> Self { Self(&self.0 & &rhs.0) }
-    pub fn __ror__(&self, rhs: Self) -> Self { Self(&self.0 | &rhs.0) }
-    pub fn __rxor__(&self, rhs: Self) -> Self { Self(&self.0 ^ &rhs.0) }
-    pub fn __rsub__(&self, rhs: Self) -> Self { Self(&self.0 - &rhs.0) }
+    fn __rand__(&self, rhs: Self) -> Self { Self(&self.0 & &rhs.0) }
+    fn __ror__(&self, rhs: Self) -> Self { Self(&self.0 | &rhs.0) }
+    fn __rxor__(&self, rhs: Self) -> Self { Self(&self.0 ^ &rhs.0) }
+    fn __rsub__(&self, rhs: Self) -> Self { Self(&self.0 - &rhs.0) }
 
-    pub fn __iand__(&mut self, rhs: Self) { self.0 &= &rhs.0 }
-    pub fn __ior__(&mut self, rhs: Self) { self.0 |= &rhs.0 }
-    pub fn __ixor__(&mut self, rhs: Self) { self.0 ^= &rhs.0 }
-    pub fn __isub__(&mut self, rhs: Self) { self.0 -= &rhs.0 }
+    fn __iand__(&mut self, rhs: Self) { self.0 &= &rhs.0 }
+    fn __ior__(&mut self, rhs: Self) { self.0 |= &rhs.0 }
+    fn __ixor__(&mut self, rhs: Self) { self.0 ^= &rhs.0 }
+    fn __isub__(&mut self, rhs: Self) { self.0 -= &rhs.0 }
     
     fn __iter__(&self) -> SplinterIter {
         SplinterIter {
             inner: self.0.iter().collect::<Vec<u32>>().into_iter(),
         }
+    }
+
+    fn __eq__(&self, rhs: &Self) -> bool { self.0 == rhs.0 }
+    fn __ne__(&self, rhs: &Self) -> bool { self.0 != rhs.0 }
+    fn __le__(&self, rhs: &Self) -> bool { (&self.0 & &rhs.0) == self.0 }
+    fn __lt__(&self, rhs: &Self) -> bool { (self.0.cardinality() < rhs.0.cardinality()) && self.__le__(rhs) }
+    fn __ge__(&self, rhs: &Self) -> bool { (&self.0 & &rhs.0) == rhs.0 }
+    fn __gt__(&self, rhs: &Self) -> bool { self.0.cardinality() > rhs.0.cardinality() &&  self.__ge__(rhs) }
+
+    fn __getstate__(&mut self, py: Python) -> Py<PyBytes> { self.to_bytes(py) }
+
+    // doesn't need Python argument??
+    fn __setstate__(&mut self, state: &Bound<PyAny>) -> PyResult<()> {
+
+        let bytes = state.extract::<&[u8]>()?;
+
+        let splinter_ref = SplinterRef::from_bytes(bytes).map_err(|e| {
+            PyValueError::new_err(format!("Failed to deserialize Splinter from bytes: {e}"))
+        })?;
+
+        let new_splinter = splinter_ref.decode_to_splinter();
+
+        self.0 = new_splinter;
+        Ok(())
     }
 }
 
