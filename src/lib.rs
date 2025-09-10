@@ -222,27 +222,25 @@ impl SplinterWrapper {
         }
     }
 
-
-
-    // pub fn merge(&mut self, splinters: &Bound<PyAny>) -> PyResult<()> {
-    //     if let Ok(rhs) = splinters.extract::<SplinterWrapper>() {
-    //         self.0.merge(&rhs.0);
-    //         Ok(())
-    //     } else if let Ok(splinter_list) = splinters.extract::<Vec<SplinterWrapper>>() {
-    //         // is this kosher? likely a more effective way to do this, right??
-    //         for rhs in splinter_list {
-    //             self.0.merge(&rhs.0);
-    //         };
-    //         Ok(())
-    //     } else {
-    //         Err(pyo3::exceptions::PyTypeError::new_err(
-    //             format!(
-    //                 "merge() argument must be a Splinter or a list of Splinters, but received an object of type {:#?}", 
-    //                 splinters.get_type().name()?
-    //             )
-    //         ))
-    //     }
-    // }
+    pub fn merge(&mut self, splinters: &Bound<PyAny>) -> PyResult<()> {
+        if let Ok(rhs) = splinters.extract::<SplinterWrapper>() {
+            self.0 |= &rhs.0;
+            Ok(())
+        } else if let Ok(splinter_list) = splinters.extract::<Vec<SplinterWrapper>>() {
+            // is this kosher? likely a more effective way to do this, right??
+            for rhs in splinter_list {
+                self.0 |= &rhs.0;
+            };
+            Ok(())
+        } else {
+            Err(pyo3::exceptions::PyTypeError::new_err(
+                format!(
+                    "merge() argument must be a Splinter or a list of Splinters, but received an object of type {:#?}", 
+                    splinters.get_type().name()?
+                )
+            ))
+        }
+    }
 
     // for cut, not currently enabling multiple sequential cuts, since it's not clear what the
     // behavior on this is, and don't want to give the user a knife to cut themselves with
