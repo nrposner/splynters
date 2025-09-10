@@ -22,13 +22,24 @@ impl SplinterWrapper {
     #[new]
     pub fn __new__() -> Self {
         let splinter = Splinter::from_iter(std::iter::empty::<u32>());
-
         Self(splinter)
     }
+    pub fn __len__(&self) -> usize { self.0.cardinality() }
+    pub fn __sizeof__(&self) -> usize { self.0.encoded_size() }
+    pub fn __repr__(&self) -> String {
+        let s = format!("SplinterWrapper(len = {}, compressed_byte_size = {})", self.0.cardinality(), self.0.encoded_size());
+        s
+    }
+    fn __iter__(&self) -> SplinterIter {
+        SplinterIter {
+            inner: self.0.iter().collect::<Vec<u32>>().into_iter(),
+        }
+    }
+
     #[staticmethod]
     pub fn from_list(data: Vec<u32>) -> Self {
         // `pyo3` automatically converts the Python list into a `Vec<u32>`.
-        // `Splinter::from_iter` can then consume the vector directly via `into_iter`.
+        // `Splinter::from_iter` can then consume the vector directly via `into_iter`
         let splinter = Splinter::from_iter(data);
 
         Self(splinter)
@@ -42,18 +53,7 @@ impl SplinterWrapper {
         let py_bytes = PyBytes::new(py, &bytes);
         py_bytes.into()
     }
-    pub fn __len__(&self) -> usize {
-        self.0.cardinality()
-    }
-    pub fn __sizeof__(&self) -> usize {
-        self.0.encoded_size()
-    }
-    pub fn __repr__(&self) -> String {
-        let s = format!("SplinterWrapper(len = {}, compressed_byte_size = {})", self.0.cardinality(), self.0.encoded_size());
-        s
-    }
-    // not going to implement this at present, as it's a feature that can potentially lead to
-    // errors and we don't want to make the wrong thing too easy
+
     #[classmethod]
     pub fn from_bytes(
         _cls: &Bound<'_, PyType>,
@@ -136,7 +136,6 @@ impl SplinterWrapper {
     // mimicking python's syntax for sets, instead of lists
 
     pub fn add(&mut self, values: &Bound<PyAny>) -> PyResult<()> {
-
         if let Ok(val) = values.extract::<u32>() {
             self.0.insert(val);
             Ok(())
@@ -285,32 +284,25 @@ impl SplinterWrapper {
         }
     }
 
-    // implementing support for bitwise operations using Python's standard 
-    // operators (via dunder class methods)
-    // this implementation should accomplish the goal without intermediate copying, 
-    // but check with Carl
+    // basic bitwise set operators
     fn __and__(&self, rhs: &Self) -> Self { Self(&self.0 & &rhs.0) }
     fn __or__(&self, rhs: &Self) -> Self { Self(&self.0 | &rhs.0) }
     fn __xor__(&self, rhs: &Self) -> Self { Self(&self.0 ^ &rhs.0) }
     fn __sub__(&self, rhs: &Self) -> Self { Self(&self.0 - &rhs.0) }
 
-    // are these redundant? implement them anyway
+    // reverse bitwise set operators, for completeness
     fn __rand__(&self, rhs: &Self) -> Self { Self(&self.0 & &rhs.0) }
     fn __ror__(&self, rhs: &Self) -> Self { Self(&self.0 | &rhs.0) }
     fn __rxor__(&self, rhs: &Self) -> Self { Self(&self.0 ^ &rhs.0) }
     fn __rsub__(&self, rhs: &Self) -> Self { Self(&self.0 - &rhs.0) }
 
+    // assign bitwise set operators
     fn __iand__(&mut self, rhs: &Self) { self.0 &= &rhs.0 }
     fn __ior__(&mut self, rhs: &Self) { self.0 |= &rhs.0 }
     fn __ixor__(&mut self, rhs: &Self) { self.0 ^= &rhs.0 }
     fn __isub__(&mut self, rhs: &Self) { self.0 -= &rhs.0 }
-    
-    fn __iter__(&self) -> SplinterIter {
-        SplinterIter {
-            inner: self.0.iter().collect::<Vec<u32>>().into_iter(),
-        }
-    }
 
+    // set comparison operations
     fn __eq__(&self, rhs: &Self) -> bool { self.0 == rhs.0 }
     fn __ne__(&self, rhs: &Self) -> bool { self.0 != rhs.0 }
     fn __le__(&self, rhs: &Self) -> bool { (&self.0 & &rhs.0) == self.0 }
@@ -318,9 +310,10 @@ impl SplinterWrapper {
     fn __ge__(&self, rhs: &Self) -> bool { (&self.0 & &rhs.0) == rhs.0 }
     fn __gt__(&self, rhs: &Self) -> bool { self.0.cardinality() > rhs.0.cardinality() &&  self.__ge__(rhs) }
 
+    // for serialization with pickle
     fn __getstate__(&mut self, py: Python) -> Py<PyBytes> { self.to_bytes(py) }
 
-    // doesn't need Python argument??
+    // for deserializing from pickle
     fn __setstate__(&mut self, state: &Bound<PyAny>) -> PyResult<()> {
 
         let bytes = state.extract::<&[u8]>()?;
@@ -346,6 +339,7 @@ impl SplinterWrapper {
     fn isdisjoint(&self, rhs: &Self) -> bool { (&self.0 & &rhs.0).is_empty() }
     fn issubset(&self, rhs: &Self) -> bool { self.__le__(rhs) }
     fn issuperset(&self, rhs: &Self) -> bool { self.__ge__(rhs) }
+    // can take multiple inputs
     #[pyo3(signature = (*rhs))]
     fn union(&self, rhs: &Bound<PyTuple>) -> PyResult<Self> {
         let mut result = self.0.clone();
@@ -355,6 +349,7 @@ impl SplinterWrapper {
         }
         Ok(Self(result))
     }
+    // can take multiple inputs
     #[pyo3(signature = (*rhs))]
     fn intersection(&self, rhs: &Bound<PyTuple>) -> PyResult<Self> { 
         let mut result = self.0.clone();
@@ -366,6 +361,7 @@ impl SplinterWrapper {
     }
 }
 
+/// Iterator class to implement __iter__ on SplinterWrapper
 #[pyclass(name = "SplinterIter")]
 struct SplinterIter {
     inner: vec::IntoIter<u32>
@@ -373,24 +369,17 @@ struct SplinterIter {
 
 #[pymethods]
 impl SplinterIter {
-    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
-        slf
-    }
-    fn __next__(mut slf: PyRefMut<'_, Self>) -> Option<u32> {
-        slf.inner.next()
-    }
+    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> { slf }
+    fn __next__(mut slf: PyRefMut<'_, Self>) -> Option<u32> { slf.inner.next() }
 }
 
-// pain in my goddamn ass new patch notes deprecating into_py making me define a return enum for
-// bools
+// as of new patch notes, it's just more straightforward to define an enum for varying outputs
 #[derive(IntoPyObject)]
 pub enum BoolOrVec {
     Bool(bool),
     Vec(Vec<bool>),
 }
 
-
-/// A Python module implemented in Rust.
 #[pymodule]
 fn splynters(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<SplinterWrapper>()?;
