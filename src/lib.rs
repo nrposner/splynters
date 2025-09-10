@@ -31,6 +31,8 @@ impl SplinterWrapper {
 
         Self(splinter)
     }
+    pub fn to_list(&self) -> Vec<u32> { self.0.iter().collect::<Vec<u32>>() }
+
     pub fn to_bytes(&mut self, py: Python) -> PyResult<Py<PyBytes>> {
         // optimize before serializing
         self.0.optimize();
