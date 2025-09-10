@@ -1,6 +1,6 @@
 use pyo3::{exceptions::PyValueError, prelude::*, types::{PyBytes, PyType}};
 use rayon::prelude::*;
-use splinter_rs::{Cut, Encodable, Merge, Optimizable, PartitionRead, PartitionWrite, Splinter, SplinterRef};
+use splinter_rs::{Cut, Encodable, Optimizable, PartitionRead, PartitionWrite, Splinter, SplinterRef};
 
 #[derive(Clone)]
 pub enum SplinterType {
@@ -219,25 +219,26 @@ impl SplinterWrapper {
     }
 
 
-    pub fn merge(&mut self, splinters: &Bound<PyAny>) -> PyResult<()> {
-        if let Ok(rhs) = splinters.extract::<SplinterWrapper>() {
-            self.0.merge(&rhs.0);
-            Ok(())
-        } else if let Ok(splinter_list) = splinters.extract::<Vec<SplinterWrapper>>() {
-            // is this kosher? likely a more effective way to do this, right??
-            for rhs in splinter_list {
-                self.0.merge(&rhs.0);
-            };
-            Ok(())
-        } else {
-            Err(pyo3::exceptions::PyTypeError::new_err(
-                format!(
-                    "merge() argument must be a Splinter or a list of Splinters, but received an object of type {:#?}", 
-                    splinters.get_type().name()?
-                )
-            ))
-        }
-    }
+
+    // pub fn merge(&mut self, splinters: &Bound<PyAny>) -> PyResult<()> {
+    //     if let Ok(rhs) = splinters.extract::<SplinterWrapper>() {
+    //         self.0.merge(&rhs.0);
+    //         Ok(())
+    //     } else if let Ok(splinter_list) = splinters.extract::<Vec<SplinterWrapper>>() {
+    //         // is this kosher? likely a more effective way to do this, right??
+    //         for rhs in splinter_list {
+    //             self.0.merge(&rhs.0);
+    //         };
+    //         Ok(())
+    //     } else {
+    //         Err(pyo3::exceptions::PyTypeError::new_err(
+    //             format!(
+    //                 "merge() argument must be a Splinter or a list of Splinters, but received an object of type {:#?}", 
+    //                 splinters.get_type().name()?
+    //             )
+    //         ))
+    //     }
+    // }
 
     // for cut, not currently enabling multiple sequential cuts, since it's not clear what the
     // behavior on this is, and don't want to give the user a knife to cut themselves with
@@ -282,7 +283,27 @@ impl SplinterWrapper {
         }
     }
 
+    // implementing support for bitwise operations using Python's standard 
+    // operators (via dunder class methods)
+    // this implementation should accomplish the goal without intermediate copying, 
+    // but check with Carl
+    pub fn __and__(&self, rhs: Self) -> Self { Self(&self.0 & &rhs.0) }
+    pub fn __or__(&self, rhs: Self) -> Self { Self(&self.0 | &rhs.0) }
+    pub fn __xor__(&self, rhs: Self) -> Self { Self(&self.0 ^ &rhs.0) }
+    pub fn __sub__(&self, rhs: Self) -> Self { Self(&self.0 - &rhs.0) }
 
+    // are these redundant? implement them anyway
+    pub fn __rand__(&self, rhs: Self) -> Self { Self(&self.0 & &rhs.0) }
+    pub fn __ror__(&self, rhs: Self) -> Self { Self(&self.0 | &rhs.0) }
+    pub fn __rxor__(&self, rhs: Self) -> Self { Self(&self.0 ^ &rhs.0) }
+    pub fn __rsub__(&self, rhs: Self) -> Self { Self(&self.0 - &rhs.0) }
+
+    pub fn __iand__(&mut self, rhs: Self) { self.0 &= &rhs.0 }
+    pub fn __ior__(&mut self, rhs: Self) { self.0 |= &rhs.0 }
+    pub fn __ixor__(&mut self, rhs: Self) { self.0 ^= &rhs.0 }
+    pub fn __isub__(&mut self, rhs: Self) { self.0 -= &rhs.0 }
+    // interesting, sub but not add, I wonder why not
+    
     // next a to_list, 
     // and also a __iter__ implementation to return the decomepressed u32 values one at at a time
 }
