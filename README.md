@@ -52,6 +52,13 @@ assert(not s.contains(99))
 assert(s.contains([1, 23, 789423]))
 ```
 
+We can also do the same for single elements using Python's `in` operator:
+
+```python
+assert(1 in s)
+assert(not 99 in s)
+```
+
 ### Set operations
 Splinters support all set operations, including bitwise operations:
 
