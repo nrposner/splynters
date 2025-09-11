@@ -40,7 +40,8 @@ impl SplinterWrapper {
     pub fn from_list(data: Vec<u32>) -> Self {
         // `pyo3` automatically converts the Python list into a `Vec<u32>`.
         // `Splinter::from_iter` can then consume the vector directly via `into_iter`
-        let splinter = Splinter::from_iter(data);
+        let mut splinter = Splinter::from_iter(data);
+        splinter.optimize();
 
         Self(splinter)
     }
