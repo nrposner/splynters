@@ -6,57 +6,87 @@ use splynters::SplinterWrapper;
 use rand::{Rng, thread_rng};
 
 
+fn main() {}
 
 
-fn generate_random_splinter_wrapper(size: usize) -> SplinterWrapper {
-    let mut rng = thread_rng();
-    let bytes: Bytes = (0..size).map(|_| rng.gen::<u8>()).collect::<Vec<u8>>().into();
-    SplinterWrapper::new(bytes)
-}
+// fn generate_random_splinter_wrapper(size: usize) -> SplinterWrapper {
+//     let mut rng = thread_rng();
+//     let bytes: Bytes = (0..size).map(|_| rng.gen::<u8>()).collect::<Vec<u8>>().into();
+//     SplinterWrapper::new(bytes)
+// }
 
-fn run_splynters_benchmarks(c: &mut Criterion) {
-    let mut group = c.benchmark_group("SplinterWrapper And Operations");
+// fn run_splynters_benchmarks(c: &mut Criterion) {
+    // let mut group = c.benchmark_group("SplinterWrapper And Operations");
+    //
+    // for size in [1024, 10 * 1024, 100 * 1024].iter() { // 1KB, 10KB, 100KB
+    //     group.throughput(criterion::Throughput::Bytes(*size as u64));
+    //
+    //     // Benchmark for and_simple
+    //     group.bench_with_input(criterion::BenchmarkId::new("and_simple", size), size, |b, &size| {
+    //         b.iter_batched(
+    //             || {
+    //                 let s1 = generate_random_splinter_wrapper(size);
+    //                 let s2 = generate_random_splinter_wrapper(size);
+    //                 (s1, s2)
+    //             },
+    //             |(mut s1, s2)| {
+    //                 s1.and_simple(s2).unwrap()
+    //             },
+    //             criterion::BatchSize::SmallInput,
+    //         );
+    //     });
+    //
+    //     // Benchmark for and_chunked
+    //     group.bench_with_input(criterion::BenchmarkId::new("and_chunked", size), size, |b, &size| {
+    //         b.iter_batched(
+    //             || {
+    //                 let s1 = generate_random_splinter_wrapper(size);
+    //                 let s2 = generate_random_splinter_wrapper(size);
+    //                 (s1, s2)
+    //             },
+    //             |(mut s1, s2)| {
+    //                 s1.and_chunked(s2).unwrap()
+    //             },
+    //             criterion::BatchSize::SmallInput,
+    //         );
+    //     });
+    // }
+    // group.finish();
+    //
+    // let mut group = c.benchmark_group("Splinter Setup Cost");
+    //
+    // for size in [1024, 10 * 1024, 100 * 1024].iter() { // 1KB, 10KB, 100KB
+    //     group.throughput(criterion::Throughput::Bytes(*size as u64));
+    //
+    //     // Benchmark for and_simple
+    //     group.bench_with_input(criterion::BenchmarkId::new("and_simple", size), size, |b, &size| {
+    //         b.iter(
+    //             || {
+    //                 let s1 = generate_random_splinter_wrapper(size);
+    //                 let s2 = generate_random_splinter_wrapper(size);
+    //                 (s1, s2)
+    //             }
+    //         );
+    //     });
+    //
+    //     // Benchmark for and_chunked
+    //     group.bench_with_input(criterion::BenchmarkId::new("and_chunked", size), size, |b, &size| {
+    //         b.iter(
+    //             || {
+    //                 let s1 = generate_random_splinter_wrapper(size);
+    //                 let s2 = generate_random_splinter_wrapper(size);
+    //                 (s1, s2)
+    //             }            
+    //         );
+    //     });
+    // }
+    // group.finish();
+// }
 
-    for size in [1024, 10 * 1024, 100 * 1024].iter() { // 1KB, 10KB, 100KB
-        group.throughput(criterion::Throughput::Bytes(*size as u64));
 
-        // Benchmark for and_simple
-        group.bench_with_input(criterion::BenchmarkId::new("and_simple", size), size, |b, &size| {
-            b.iter_batched(
-                || {
-                    let s1 = generate_random_splinter_wrapper(size);
-                    let s2 = generate_random_splinter_wrapper(size);
-                    (s1, s2)
-                },
-                |(mut s1, s2)| {
-                    s1.and_simple(s2).unwrap()
-                },
-                criterion::BatchSize::SmallInput,
-            );
-        });
-
-        // Benchmark for and_chunked
-        group.bench_with_input(criterion::BenchmarkId::new("and_chunked", size), size, |b, &size| {
-            b.iter_batched(
-                || {
-                    let s1 = generate_random_splinter_wrapper(size);
-                    let s2 = generate_random_splinter_wrapper(size);
-                    (s1, s2)
-                },
-                |(mut s1, s2)| {
-                    s1.and_chunked(s2).unwrap()
-                },
-                criterion::BatchSize::SmallInput,
-            );
-        });
-    }
-    group.finish();
-}
-
-
-// These macros generate the necessary main function for the benchmark.
-criterion_group!(benches, run_splynters_benchmarks);
-criterion_main!(benches);
+// // These macros generate the necessary main function for the benchmark.
+// criterion_group!(benches, run_splynters_benchmarks);
+// criterion_main!(benches);
 
 
 
