@@ -4,12 +4,31 @@ build-backend = "maturin"
 
 [project]
 name = "splynters"
+version = "0.1.0"
+authors = [ {name = "Nicolas Roman Posner", email = "nrposner@uchicago.edu"}, ]
+maintainers = [{ name = "Nicolas Roman Posner", email = "nrposner@uchicago.edu" }]
+keywords = ["compression", "roaring"]
+
+description = "A Python frontend for the splinter-rs bitmap compression library"
+readme = "README.md"
 requires-python = ">=3.8"
 classifiers = [
+    "Development Status :: 4 - Beta",
     "Programming Language :: Rust",
+    "Programming Language :: Python :: 3",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
-]
-dynamic = ["version"]
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: System :: Archiving :: Compression",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Databases/Systems",
+    "License :: OSI Approved :: Apache 2.0 License",]
+
+# license = { file = "LICENSE" }
+
+[project.urls]
+Repository = "[https://github.com/nrposner/splynters](https://github.com/nrposner/splynters)"
+
 [tool.maturin]
 features = ["pyo3/extension-module"]
+profile = "release"

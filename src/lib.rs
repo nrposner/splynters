@@ -1,6 +1,6 @@
 use std::vec;
 
-use pyo3::{exceptions::PyValueError, prelude::*, types::{PyBytes, PyTuple, PyType}};
+use pyo3::{exceptions::PyValueError, prelude::*, types::{PyBytes, PyTuple, PyType}, PyTypeInfo};
 use rayon::prelude::*;
 use splinter_rs::{Cut, Encodable, Optimizable, PartitionRead, PartitionWrite, Splinter, SplinterRef};
 
@@ -13,7 +13,7 @@ pub enum SplinterType {
 
 /// A wrapper for higher-order functionality over the Splinter 
 /// crate
-#[pyclass(name="Splinter")]
+#[pyclass(name="Splinter", module="splynters")]
 #[derive(Clone)] 
 pub struct SplinterWrapper(Splinter);
 
@@ -47,9 +47,7 @@ impl SplinterWrapper {
     }
     pub fn to_list(&self) -> Vec<u32> { self.0.iter().collect() }
 
-    pub fn to_bytes(&mut self, py: Python) ->Py<PyBytes> {
-        // optimize before serializing
-        self.0.optimize();
+    pub fn to_bytes(&self, py: Python) -> Py<PyBytes> {
         let bytes = self.0.encode_to_splinter_ref().into_inner();
         let py_bytes = PyBytes::new(py, &bytes);
         py_bytes.into()
@@ -139,11 +137,13 @@ impl SplinterWrapper {
     pub fn add(&mut self, values: &Bound<PyAny>) -> PyResult<()> {
         if let Ok(val) = values.extract::<u32>() {
             self.0.insert(val);
+            self.0.optimize();
             Ok(())
         } else if let Ok(vals) = values.extract::<Vec<u32>>() {
             vals.iter().for_each(|val| {
                 self.0.insert(*val);
             });
+            self.0.optimize();
             Ok(())
         } else {
             Err(pyo3::exceptions::PyTypeError::new_err(
@@ -225,12 +225,14 @@ impl SplinterWrapper {
     pub fn merge(&mut self, splinters: &Bound<PyAny>) -> PyResult<()> {
         if let Ok(rhs) = splinters.extract::<SplinterWrapper>() {
             self.0 |= &rhs.0;
+            self.0.optimize();
             Ok(())
         } else if let Ok(splinter_list) = splinters.extract::<Vec<SplinterWrapper>>() {
             // is this kosher? likely a more effective way to do this, right??
             for rhs in splinter_list {
                 self.0 |= &rhs.0;
             };
+            self.0.optimize();
             Ok(())
         } else {
             Err(pyo3::exceptions::PyTypeError::new_err(
@@ -312,8 +314,11 @@ impl SplinterWrapper {
     fn __gt__(&self, rhs: &Self) -> bool { self.0.cardinality() > rhs.0.cardinality() &&  self.__ge__(rhs) }
 
     // for serialization with pickle
-    fn __getstate__(&mut self, py: Python) -> Py<PyBytes> { self.to_bytes(py) }
-
+    // fn __getstate__(&mut self, py: Python) -> Py<PyBytes> { self.to_bytes(py) }
+    fn __getstate__(&self, py: Python) -> PyObject {
+        let bytes = self.to_bytes(py);
+        bytes.into()
+    }
     // for deserializing from pickle
     fn __setstate__(&mut self, state: &Bound<PyAny>) -> PyResult<()> {
 
@@ -327,6 +332,13 @@ impl SplinterWrapper {
 
         self.0 = new_splinter;
         Ok(())
+    }
+    /// tells pickle how to find the class and serialize it
+    fn __reduce__<'py>(&self, py: Python<'py>,) -> (PyObject, PyObject, PyObject) {
+        let class = Self::type_object(py).into();
+        let args = PyTuple::empty(py).into();
+        let state = self.__getstate__(py);
+        (class, args, state)
     }
 
     // copy protocol
