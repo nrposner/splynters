@@ -37,6 +37,13 @@ impl SplinterWrapper {
     }
 
     #[staticmethod]
+    /// Constructs a Splinter from an iterator of unsigned integers.
+    ///
+    /// Args:
+    ///     data list[int]: The iterator from which to construct the Splinter.
+    ///
+    /// Returns: 
+    ///     Splinter: A Splinter object constructed from the input items
     pub fn from_list(data: Vec<u32>) -> Self {
         // `pyo3` automatically converts the Python list into a `Vec<u32>`.
         // `Splinter::from_iter` can then consume the vector directly via `into_iter`
@@ -54,6 +61,21 @@ impl SplinterWrapper {
     }
 
     #[classmethod]
+    /// Constructs a Splinter from raw byte data.
+    ///
+    /// Panics: 
+    ///     This method may cause a panic if the bytes are not formatted correctly.
+    ///     splinter-rs provides a checksum in the serialized data to protect against 
+    ///     corrupted or modified data, and will not cause any undefined behavior, but
+    ///     malicious input can cause a panic.
+    ///     Only use this method on trusted data.
+    ///
+    /// Args:
+    ///     data array[byte]: The byte data from which to construct the Splinter.
+    ///
+    /// Returns: 
+    ///     Splinter: A Splinter object, or else an error explaining why
+    ///     construction failed.
     pub fn from_bytes(
         _cls: &Bound<'_, PyType>,
         data: &[u8],
@@ -78,7 +100,7 @@ impl SplinterWrapper {
     ///
     /// Returns:
     ///     bool | list[bool]: A single boolean if the input was a single integer,
-    ///                         or a list of booleans if the input was a list.
+    ///     or a list of booleans if the input was a list.
     pub fn contains(&self, value: &Bound<PyAny>) -> PyResult<BoolOrVec> {
         if let Ok(single_val) = value.extract::<u32>() {
             let result = self.0.contains(single_val);
@@ -99,6 +121,19 @@ impl SplinterWrapper {
         }
     }
 
+    /// Checks if the bitmap contains multiple values in parallel.
+    ///
+    /// Note: 
+    ///     This parallelized implementation introduces considerable overhead
+    ///     compared to an individual check. It is not recommended to use
+    ///     this unless you are checking for the presence of at least 
+    ///     10,000 elements
+    ///     
+    /// Args:
+    ///     values list[int]: The values values to check for.
+    ///
+    /// Returns:
+    ///     list[bool]: A list of booleans.
     pub fn contains_many_parallel(
         &self, 
         values: &Bound<PyAny>
@@ -134,6 +169,13 @@ impl SplinterWrapper {
     
     // mimicking python's syntax for sets, instead of lists
 
+    /// Inserts a value into the Splinter
+    ///
+    /// This method is overloaded. It can accept either a single integer or an
+    /// iterable of integers.
+    ///
+    /// Args:
+    ///     values (int | list[int]): The value or values to check for.
     pub fn add(&mut self, values: &Bound<PyAny>) -> PyResult<()> {
         if let Ok(val) = values.extract::<u32>() {
             self.0.insert(val);
@@ -155,6 +197,13 @@ impl SplinterWrapper {
         }
     }
 
+    /// Removes a value into the Splinter and returns an error if the value is missing.
+    ///
+    /// This method is overloaded. It can accept either a single integer or an
+    /// iterable of integers.
+    ///
+    /// Args:
+    ///     values (int | list[int]): The value or values to check for.
     pub fn remove(&mut self, value: &Bound<PyAny>) -> PyResult<()> {
         if let Ok(single_val) = value.extract::<u32>() {
             if !self.0.remove(single_val) {
@@ -198,9 +247,13 @@ impl SplinterWrapper {
         }
     }
 
-
-    //for discard, we don' return a bool or raise an error on incorrect removal
-
+    /// Removes a value into the Splinter, or does nothing if the value is missing.
+    ///
+    /// This method is overloaded. It can accept either a single integer or an
+    /// iterable of integers.
+    ///
+    /// Args:
+    ///     values (int | list[int]): The value or values to check for.
     pub fn discard(&mut self, value: &Bound<PyAny>) -> PyResult<()> {
         if let Ok(single_val) = value.extract::<u32>() {
             self.0.remove(single_val);
@@ -222,6 +275,10 @@ impl SplinterWrapper {
         }
     }
 
+    /// Merges two or more splinters together
+    ///
+    /// Args:
+    ///     splinters (Splinter | list[Splinter]): The object or objects to merge with
     pub fn merge(&mut self, splinters: &Bound<PyAny>) -> PyResult<()> {
         if let Ok(rhs) = splinters.extract::<SplinterWrapper>() {
             self.0 |= &rhs.0;
@@ -246,8 +303,20 @@ impl SplinterWrapper {
 
     // for cut, not currently enabling multiple sequential cuts, since it's not clear what the
     // behavior on this is, and don't want to give the user a knife to cut themselves with
-    pub fn cut(&mut self, splinters: &Bound<PyAny>) -> PyResult<Self> {
-        if let Ok(rhs) = splinters.extract::<SplinterWrapper>() {
+
+    /// Removes and returns the intersection between self and splinter.
+    ///
+    /// If self and splinter have no overlap, it returns an empty Splinter and does not modify
+    /// self. Otherwise, any elements in common between the two will be removed from self and
+    /// returned to the caller.
+    ///
+    /// Args:
+    ///     splinter Splinter: A Splinter object to intersect with
+    ///
+    /// Returns: 
+    ///     Splinter
+    pub fn cut(&mut self, splinter: &Bound<PyAny>) -> PyResult<Self> {
+        if let Ok(rhs) = splinter.extract::<SplinterWrapper>() {
             let splinter = self.0.cut(&rhs.0);
 
             Ok(Self(splinter))
@@ -255,12 +324,21 @@ impl SplinterWrapper {
             Err(pyo3::exceptions::PyTypeError::new_err(
                 format!(
                     "cut() argument must be a Splinter, but received an object of type {:#?}",
-                    splinters.get_type().name()?
+                    splinter.get_type().name()?
                 )
             ))
         }
     }
 
+    /// Returns the number of elements in the Splinter that are less than or equal to the given
+    /// value.
+    ///
+    /// Args:
+    ///     value int: the value to compare against. Cannot be negative
+    ///
+    /// Returns:
+    ///     int: an integer indicating the number of elements less than or equalt to the given
+    ///     value
     pub fn rank(&self, value: &Bound<PyAny>) -> PyResult<usize> {
         if let Ok(val) = value.extract::<u32>() {
             Ok(self.0.rank(val))
@@ -274,14 +352,29 @@ impl SplinterWrapper {
         }
     }
 
-    pub fn select(&self, value: &Bound<PyAny>) -> PyResult<Option<u32>> {
-        if let Ok(val) = value.extract::<usize>() {
+    // sugar over this to allow selecting using the [] notation, including negative indices??
+
+    /// Returns the element at the given index in the sorted sequence, or None if it is out of
+    /// bounds.
+    ///
+    /// Args: 
+    ///     idx int: the index of the sequence to grab. Negative indices count back
+    ///     from the end.
+    ///
+    /// Returns: 
+    ///     (int | None): the element at the relevant index, or else a None if overflowed
+    pub fn select(&self, idx: &Bound<PyAny>) -> PyResult<Option<u32>> {
+        if let Ok(val) = idx.extract::<usize>() {
             Ok(self.0.select(val))
+        } else if let Ok(val) = idx.extract::<isize>() {
+            if let Some(index) = self.0.cardinality().checked_sub(val as usize) {
+                Ok(self.0.select(index))
+            } else { Ok(None) }
         } else {
             Err(pyo3::exceptions::PyTypeError::new_err(
                 format!(
-                    "select() argument must be an unsigned integer, but received an object of type {:#?}",
-                    value.get_type().name()?
+                    "select() argument must be an integer, but received an object of type {:#?}",
+                    idx.get_type().name()?
                 )
             ))
         }
@@ -314,14 +407,12 @@ impl SplinterWrapper {
     fn __gt__(&self, rhs: &Self) -> bool { self.0.cardinality() > rhs.0.cardinality() &&  self.__ge__(rhs) }
 
     // for serialization with pickle
-    // fn __getstate__(&mut self, py: Python) -> Py<PyBytes> { self.to_bytes(py) }
     fn __getstate__(&self, py: Python) -> PyObject {
         let bytes = self.to_bytes(py);
         bytes.into()
     }
     // for deserializing from pickle
     fn __setstate__(&mut self, state: &Bound<PyAny>) -> PyResult<()> {
-
         let bytes = state.extract::<&[u8]>()?;
 
         let splinter_ref = SplinterRef::from_bytes(bytes).map_err(|e| {
@@ -333,6 +424,7 @@ impl SplinterWrapper {
         self.0 = new_splinter;
         Ok(())
     }
+
     /// tells pickle how to find the class and serialize it
     fn __reduce__<'py>(&self, py: Python<'py>,) -> (PyObject, PyObject, PyObject) {
         let class = Self::type_object(py).into();
@@ -349,10 +441,49 @@ impl SplinterWrapper {
 
     // explicit set methods
     // omitting the usual snake_case _ to more closely fit the Python idiom
+
+    /// Returns true if self and rhs have no overlap, and false otherwise.
+    ///
+    /// This is an explicit implementation of (self & rhs).is_empty().
+    ///
+    /// Args:
+    ///     rhs Splinter: a Splinter object to compare against   
+    ///
+    /// Returns:
+    ///     bool: true if there is no overlap, false otherwise
     fn isdisjoint(&self, rhs: &Self) -> bool { (&self.0 & &rhs.0).is_empty() }
+
+    /// Returns true if self is a subset of rhs, and false otherwise.
+    ///
+    /// This is an explicit implementation of (self & rhs) == self.
+    ///
+    /// Args:
+    ///     rhs Splinter: a Splinter object to compare against   
+    ///
+    /// Returns:
+    ///     bool: true if self is a subset of rhs, false otherwise
     fn issubset(&self, rhs: &Self) -> bool { self.__le__(rhs) }
+    
+    /// Returns true if self is a superset of rhs, and false otherwise.
+    ///
+    /// This is an explicit implementation of (self & rhs) == rhs.
+    ///
+    /// Args:
+    ///     rhs Splinter: a Splinter object to compare against   
+    ///
+    /// Returns:
+    ///     bool: true if self is a subset of rhs, false otherwise
     fn issuperset(&self, rhs: &Self) -> bool { self.__ge__(rhs) }
-    // can take multiple inputs
+
+    // todo: consolidate this with merge???
+
+    /// Returns the union of one or more Splinters
+    ///
+    /// Args:
+    ///     rhs list[Splinter]: an iterable of one or more Splinters to combine
+    ///
+    /// Returns:
+    ///     Splinter: a combined splinter made up of the union of all provided values
     #[pyo3(signature = (*rhs))]
     fn union(&self, rhs: &Bound<PyTuple>) -> PyResult<Self> {
         let mut result = self.0.clone();
@@ -362,7 +493,14 @@ impl SplinterWrapper {
         }
         Ok(Self(result))
     }
-    // can take multiple inputs
+
+    /// Returns the intersection of one or more Splinters
+    ///
+    /// Args:
+    ///     rhs: list[Splinter]: an iterable of one or more Splinters to combine
+    ///
+    /// Return: 
+    ///     Splinter: a combined splinter made up of the intersection of all provided values
     #[pyo3(signature = (*rhs))]
     fn intersection(&self, rhs: &Bound<PyTuple>) -> PyResult<Self> { 
         let mut result = self.0.clone();
