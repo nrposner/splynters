@@ -1,8 +1,9 @@
 use std::vec;
 
+use bytes::Bytes;
 use pyo3::{exceptions::{PyTypeError, PyValueError}, prelude::*, types::{PyBytes, PyTuple, PyType}, PyTypeInfo};
 use rayon::prelude::*;
-use splinter_rs::{Cut, Encodable, Optimizable, PartitionRead, PartitionWrite, Splinter, SplinterRef};
+use splinter_rs::{CowSplinter, Cut, Encodable, Optimizable, PartitionRead, PartitionWrite};
 
 #[derive(Clone)]
 pub enum SplinterType {
@@ -15,13 +16,13 @@ pub enum SplinterType {
 /// crate
 #[pyclass(name="Splinter", module="splynters")]
 #[derive(Clone)] 
-pub struct SplinterWrapper(Splinter);
+pub struct SplinterWrapper(CowSplinter<Bytes>);
 
 #[pymethods]
 impl SplinterWrapper {
     #[new]
     pub fn __new__() -> Self {
-        let splinter = Splinter::from_iter(std::iter::empty::<u32>());
+        let splinter = CowSplinter::from_iter(std::iter::empty::<u32>());
         Self(splinter)
     }
     pub fn __len__(&self) -> usize { self.0.cardinality() }
@@ -61,15 +62,15 @@ impl SplinterWrapper {
     pub fn from_list(data: Vec<u32>) -> Self {
         // `pyo3` automatically converts the Python list into a `Vec<u32>`.
         // `Splinter::from_iter` can then consume the vector directly via `into_iter`
-        let mut splinter = Splinter::from_iter(data);
-        splinter.optimize();
+        let mut splinter = CowSplinter::from_iter(data);
+        splinter.to_mut().optimize();
 
         Self(splinter)
     }
     pub fn to_list(&self) -> Vec<u32> { self.0.iter().collect() }
 
     pub fn to_bytes(&self, py: Python) -> Py<PyBytes> {
-        let bytes = self.0.encode_to_splinter_ref().into_inner();
+        let bytes = self.0.encode_to_bytes();
         let py_bytes = PyBytes::new(py, &bytes);
         py_bytes.into()
     }
@@ -94,12 +95,11 @@ impl SplinterWrapper {
         _cls: &Bound<'_, PyType>,
         data: &[u8],
     ) -> PyResult<Self> {
-
-        let splinter_ref = SplinterRef::from_bytes(data).map_err(|e| {
+        // does this make us no longer zero-copy??
+        let bytes = Bytes::copy_from_slice(data);
+        let splinter = CowSplinter::from_bytes(bytes).map_err(|e| {
             PyValueError::new_err(format!("Splinter could not be constructed from bytes: {e}"))
         })?;
-
-        let splinter = splinter_ref.decode_to_splinter();
 
         Ok(Self(splinter))
     }
@@ -183,13 +183,13 @@ impl SplinterWrapper {
     pub fn add(&mut self, values: &Bound<PyAny>) -> PyResult<()> {
         if let Ok(val) = values.extract::<u32>() {
             self.0.insert(val);
-            self.0.optimize();
+            self.0.to_mut().optimize();
             Ok(())
         } else if let Ok(vals) = values.extract::<Vec<u32>>() {
             vals.iter().for_each(|val| {
                 self.0.insert(*val);
             });
-            self.0.optimize();
+            self.0.to_mut().optimize();
             Ok(())
         } else {
             Err(PyTypeError::new_err(
@@ -218,7 +218,7 @@ impl SplinterWrapper {
                 ))
             } else {
                 // if we get to this point, the operation completed successfully, and we optimize
-                self.0.optimize();
+                self.0.to_mut().optimize();
                 Ok(())
             }
         } else if let Ok(vals) = value.extract::<Vec<u32>>() {
@@ -239,7 +239,7 @@ impl SplinterWrapper {
                 self.0.remove(*val);
             });
             // if we ge to this point, the operation completed successfully
-            self.0.optimize();
+            self.0.to_mut().optimize();
             Ok(())
         } else { 
             Err(PyTypeError::new_err(
@@ -261,13 +261,13 @@ impl SplinterWrapper {
     pub fn discard(&mut self, value: &Bound<PyAny>) -> PyResult<()> {
         if let Ok(single_val) = value.extract::<u32>() {
             self.0.remove(single_val);
-            self.0.optimize();
+            self.0.to_mut().optimize();
             Ok(())
         } else if let Ok(vals) = value.extract::<Vec<u32>>() {
             vals.iter().for_each(|val| {
                 self.0.remove(*val);
             });
-            self.0.optimize();
+            self.0.to_mut().optimize();
             Ok(())
         } else { 
             Err(PyTypeError::new_err(
@@ -288,15 +288,16 @@ impl SplinterWrapper {
     ///     splinters (Splinter | list[Splinter]): The object or objects to merge with
     pub fn merge(&mut self, splinters: &Bound<PyAny>) -> PyResult<()> {
         if let Ok(rhs) = splinters.extract::<SplinterWrapper>() {
-            self.0 |= &rhs.0;
-            self.0.optimize();
+            // todo: ask Carl if this is kosher
+            *self.0.to_mut() |= &rhs.0;
+            self.0.to_mut().optimize();
             Ok(())
         } else if let Ok(splinter_list) = splinters.extract::<Vec<SplinterWrapper>>() {
             // is this kosher? likely a more effective way to do this, right??
             for rhs in splinter_list {
-                self.0 |= &rhs.0;
+                *self.0.to_mut() |= &rhs.0;
             };
-            self.0.optimize();
+            self.0.to_mut().optimize();
             Ok(())
         } else {
             Err(PyTypeError::new_err(
@@ -310,6 +311,7 @@ impl SplinterWrapper {
 
     // for cut, not currently enabling multiple sequential cuts, since it's not clear what the
     // behavior on this is, and don't want to give the user a knife to cut themselves with
+    // todo: double check that this isn't terrible
 
     /// Removes and returns the intersection between self and splinter.
     ///
@@ -322,7 +324,7 @@ impl SplinterWrapper {
     ///
     /// Returns: 
     ///     Splinter
-    pub fn cut(&mut self, rhs: SplinterWrapper) -> Self { Self(self.0.cut(&rhs.0)) }
+    pub fn cut(&mut self, rhs: SplinterWrapper) -> Self { Self(CowSplinter::from_owned(self.0.to_mut().cut(&rhs.0)))}
 
     /// Returns the number of elements in the Splinter that are less than or equal to the given
     /// value.
@@ -385,10 +387,11 @@ impl SplinterWrapper {
     fn __rsub__(&self, rhs: &Self) -> Self { Self(&self.0 - &rhs.0) }
 
     // assign bitwise set operators
-    fn __iand__(&mut self, rhs: &Self) { self.0 &= &rhs.0 }
-    fn __ior__(&mut self, rhs: &Self) { self.0 |= &rhs.0 }
-    fn __ixor__(&mut self, rhs: &Self) { self.0 ^= &rhs.0 }
-    fn __isub__(&mut self, rhs: &Self) { self.0 -= &rhs.0 }
+    // todo: ask Carl if this is kosher
+    fn __iand__(&mut self, rhs: &Self) { *self.0.to_mut() &= &rhs.0 }
+    fn __ior__(&mut self, rhs: &Self) { *self.0.to_mut() |= &rhs.0 }
+    fn __ixor__(&mut self, rhs: &Self) { *self.0.to_mut() ^= &rhs.0 }
+    fn __isub__(&mut self, rhs: &Self) { *self.0.to_mut() -= &rhs.0 }
 
     // set comparison operations
     fn __eq__(&self, rhs: &Self) -> bool { self.0 == rhs.0 }
@@ -405,13 +408,9 @@ impl SplinterWrapper {
     }
     // for deserializing from pickle
     fn __setstate__(&mut self, bytes: &[u8]) -> PyResult<()> {
-        let splinter_ref = SplinterRef::from_bytes(bytes).map_err(|e| {
+        self.0 = CowSplinter::from_bytes(Bytes::copy_from_slice(bytes)).map_err(|e| {
             PyValueError::new_err(format!("Failed to deserialize Splinter from bytes: {e}"))
         })?;
-
-        let new_splinter = splinter_ref.decode_to_splinter();
-
-        self.0 = new_splinter;
         Ok(())
     }
 
@@ -479,7 +478,7 @@ impl SplinterWrapper {
         let mut result = self.0.clone();
         for other in rhs.iter() {
             let other_splinter = other.extract::<PyRef<Self>>()?;
-            result |= &other_splinter.0;
+            *result.to_mut() |= &other_splinter.0;
         }
         Ok(Self(result))
     }
@@ -496,7 +495,7 @@ impl SplinterWrapper {
         let mut result = self.0.clone();
         for other in rhs.iter() {
             let other_splinter = other.extract::<PyRef<Self>>()?;
-            result &= &other_splinter.0;
+            *result.to_mut() &= &other_splinter.0;
         }
         Ok(Self(result))
     }
