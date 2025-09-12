@@ -36,6 +36,20 @@ impl SplinterWrapper {
         }
     }
 
+    fn __getitem__(&self, index: isize) -> PyResult<u32> {
+        let len = self.0.cardinality();
+        let mut actual_index = index;
+
+        if actual_index < 0 {
+            actual_index += len as isize;
+        }
+
+        match self.0.select(actual_index as usize) {
+            Some(value) => Ok(value),
+            None => Err(pyo3::exceptions::PyIndexError::new_err( "splinter index out of range"))
+        }
+    }
+
     #[staticmethod]
     /// Constructs a Splinter from an iterator of unsigned integers.
     ///
@@ -136,22 +150,12 @@ impl SplinterWrapper {
     ///     list[bool]: A list of booleans.
     pub fn contains_many_parallel(
         &self, 
-        values: &Bound<PyAny>
-    ) -> PyResult<Vec<bool>> {
-        if let Ok(vals) = values.extract::<Vec<u32>>() {
-            let res = vals
-                .par_iter()
-                .map(|&val| self.0.contains(val))
-                .collect();
-            Ok(res)
-        } else {
-            Err(pyo3::exceptions::PyTypeError::new_err(
-                format!(
-                    "contains_many_parallel() argument must be a list of integers, but received an object of type {:#?}", 
-                    values.get_type().name()?
-                )
-            ))
-        }
+        values: Vec<u32>,
+    ) -> Vec<bool> {
+        values
+            .par_iter()
+            .map(|&val| self.0.contains(val))
+            .collect()
     }
 
     /// Implements the Python 'in' operator for checking a single value.
@@ -277,6 +281,9 @@ impl SplinterWrapper {
 
     /// Merges two or more splinters together
     ///
+    /// This method is overloaded. It can accept either a single Splinter or an
+    /// iterable of Splinters.
+    ///
     /// Args:
     ///     splinters (Splinter | list[Splinter]): The object or objects to merge with
     pub fn merge(&mut self, splinters: &Bound<PyAny>) -> PyResult<()> {
@@ -315,20 +322,7 @@ impl SplinterWrapper {
     ///
     /// Returns: 
     ///     Splinter
-    pub fn cut(&mut self, splinter: &Bound<PyAny>) -> PyResult<Self> {
-        if let Ok(rhs) = splinter.extract::<SplinterWrapper>() {
-            let splinter = self.0.cut(&rhs.0);
-
-            Ok(Self(splinter))
-        } else {
-            Err(pyo3::exceptions::PyTypeError::new_err(
-                format!(
-                    "cut() argument must be a Splinter, but received an object of type {:#?}",
-                    splinter.get_type().name()?
-                )
-            ))
-        }
-    }
+    pub fn cut(&mut self, rhs: SplinterWrapper) -> Self { Self(self.0.cut(&rhs.0)) }
 
     /// Returns the number of elements in the Splinter that are less than or equal to the given
     /// value.
@@ -339,18 +333,7 @@ impl SplinterWrapper {
     /// Returns:
     ///     int: an integer indicating the number of elements less than or equalt to the given
     ///     value
-    pub fn rank(&self, value: &Bound<PyAny>) -> PyResult<usize> {
-        if let Ok(val) = value.extract::<u32>() {
-            Ok(self.0.rank(val))
-        } else {
-            Err(pyo3::exceptions::PyTypeError::new_err(
-                format!(
-                    "rank() argument must be an unsigned integer, but received an object of type {:#?}",
-                    value.get_type().name()?
-                )
-            ))
-        }
-    }
+    pub fn rank(&self, value: u32) -> usize { self.0.rank(value) }
 
     // sugar over this to allow selecting using the [] notation, including negative indices??
 
@@ -412,9 +395,7 @@ impl SplinterWrapper {
         bytes.into()
     }
     // for deserializing from pickle
-    fn __setstate__(&mut self, state: &Bound<PyAny>) -> PyResult<()> {
-        let bytes = state.extract::<&[u8]>()?;
-
+    fn __setstate__(&mut self, bytes: &[u8]) -> PyResult<()> {
         let splinter_ref = SplinterRef::from_bytes(bytes).map_err(|e| {
             PyValueError::new_err(format!("Failed to deserialize Splinter from bytes: {e}"))
         })?;
