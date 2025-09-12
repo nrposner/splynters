@@ -28,7 +28,7 @@ classifiers = [
 license = { file = "LICENSE" }
 
 [project.urls]
-Repository = "[https://github.com/nrposner/splynters](https://github.com/nrposner/splynters)"
+repository = "https://github.com/nrposner/splynters"
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
