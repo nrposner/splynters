@@ -21,7 +21,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Information Analysis",
     "Topic :: System :: Archiving :: Compression",
     "Operating System :: OS Independent",
-    "License :: OSI Approved :: Apache 2.0 License",]
+    "License :: OSI Approved :: Apache-2.0 License",]
 
 license = { file = "LICENSE" }
 
