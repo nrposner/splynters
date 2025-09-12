@@ -71,18 +71,8 @@ jobs:
           path: dist/ 
           merge-multiple: true
 
-      - name: Check if secret is present
-        shell: bash
-        run: |
-          if [ -z "${{ secrets.PYPI_API_TOKEN }}" ]; then
-            echo "❌ PYPI_API_TOKEN is NOT set"
-            exit 1
-          else
-            echo "✅ PYPI_API_TOKEN is present"
-          fi
-
       - name: Build the source distribution (sdist)
         run: maturin sdist --out dist
 
       - name: Publish to PyPI
-        run: maturin upload --skip-existing --username __token__ --password ${{ secrets.PYPI_API_TOKEN }} dist/*
+        run: maturin upload --skip-existing dist/*
