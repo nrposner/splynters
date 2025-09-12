@@ -190,3 +190,14 @@ pickled_s = pickle.dumps(s)
 unpickled_s = pickle.loads(pickled_s)
 assert(s == unpickled_s)
 ```
+
+## Dependencies
+
+At present, `splynters` has no additional dependencies.
+
+## Roadmap
+
+ - Keep splynters up to date with the splinter-rs API and capabilities
+ - Benchmark runtime performance of major operations against PyRoaring
+ - Add optional numpy dependency to enable faster serialization to and from numpy arrays, Pandas series, and Polars series.
+

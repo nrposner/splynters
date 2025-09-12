@@ -24,7 +24,7 @@ classifiers = [
     "Intended Audience :: Databases/Systems",
     "License :: OSI Approved :: Apache 2.0 License",]
 
-# license = { file = "LICENSE" }
+license = { file = "LICENSE" }
 
 [project.urls]
 Repository = "[https://github.com/nrposner/splynters](https://github.com/nrposner/splynters)"
