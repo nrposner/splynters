@@ -47,6 +47,12 @@ We can check for the presence of an element using the `.contains()` method. This
 Note that we also provide a `.contains_many_parallel()` method designed to speed up the process of searching for the presence of many elements at once by parallelizing the search. Note that the regular `.contains()` method is fast enough that the parallel version is not likely to be faster unless you are searching for more than 10,000 elements.
 
 ```python
+data = [1, 5, 789423, 23]
+s = Splinter.from_list(data)
+
+s.add(6)
+s.remove(5)
+
 assert(s.contains(1))
 assert(not s.contains(99))
 assert(s.contains([1, 23, 789423]))
@@ -57,6 +63,16 @@ We can also do the same for single elements using Python's `in` operator:
 ```python
 assert(1 in s)
 assert(not 99 in s)
+```
+
+And can also access elements or ranges of elements using Python's slice syntax, with negative numbers indicating indices counting from the end:
+
+```python
+assert(s[2] == 23) # access the third element
+assert(s[-1] == 789423) # access the last element
+assert(s[1:] == [6, 23, 789423]) # access all elements starting from the second
+assert(s[0::2] == [1, 23]) # access every other element starting from the first
+assert(s[::-1] == [789423, 23, 6, 1]) # access all elements backwards
 ```
 
 ### Set operations

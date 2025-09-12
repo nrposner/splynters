@@ -1,7 +1,7 @@
 use std::vec;
 
 use bytes::Bytes;
-use pyo3::{exceptions::{PyTypeError, PyValueError}, prelude::*, types::{PyBytes, PyTuple, PyType}, PyTypeInfo};
+use pyo3::{exceptions::{PyTypeError, PyValueError}, prelude::*, types::{PyBytes, PySlice, PyTuple, PyType}, PyTypeInfo};
 use rayon::prelude::*;
 use splinter_rs::{CowSplinter, Cut, Encodable, Optimizable, PartitionRead, PartitionWrite};
 
@@ -37,18 +37,68 @@ impl SplinterWrapper {
         }
     }
 
-    fn __getitem__(&self, index: isize) -> PyResult<u32> {
-        let len = self.0.cardinality();
-        let mut actual_index = index;
 
-        if actual_index < 0 {
-            actual_index += len as isize;
+    /// Returns an element or list of elements based on the input index or slice
+    ///
+    /// Operates according to Python's slice syntax: [start:stop:step]
+    /// Supports selection by negative indices and negative steps
+    fn __getitem__(&self, index: &Bound<PyAny>) -> PyResult<UintOrVec> {
+        if let Ok(i_idx) = index.extract::<isize>() {
+            let len = self.0.cardinality();
+            let mut actual_index = i_idx;
+
+            if actual_index < 0 {
+                actual_index += len as isize;
+            }
+
+            match self.0.select(actual_index as usize) {
+                Some(value) => Ok(UintOrVec::U32(value)),
+                None => Err(pyo3::exceptions::PyIndexError::new_err( "splinter index out of range"))
+            }
+        } else if let Ok(u_idx) = index.extract::<usize>() {
+
+            match self.0.select(u_idx) {
+                Some(value) => Ok(UintOrVec::U32(value)),
+                None => Err(pyo3::exceptions::PyIndexError::new_err( "splinter index out of range"))
+            }
+        } else if let Ok(slice) = index.downcast::<PySlice>() {
+
+            let len = self.0.cardinality() as isize;
+            let indices = slice.indices(len)?;
+
+            let mut sliced_values = Vec::with_capacity(indices.slicelength);
+
+            // the step = 0 case is caught by pyo3 in the construction of the PySlice type
+            // we do not need to account for it here
+            if indices.step > 0 {
+                sliced_values.extend(
+                    self.0.iter()
+                        .skip(indices.start as usize)
+                        .step_by(indices.step as usize)
+                        .take(indices.slicelength)
+                );
+            } else {
+
+                let mut current = indices.start;
+                (0..indices.slicelength).for_each(|_| {
+                    if let Some(val) = self.0.select(current as usize) {
+                        sliced_values.push(val);
+                    }
+                    current += indices.step;
+                });
+            }
+
+            // let start = indices.start as usize;
+            // let stop = indices.stop as usize;
+            // let step = indices.step as usize;
+
+            // let sliced_values: Vec<u32> = self.0.iter().skip(start).step_by(step).take((stop - start) / step + 1).collect();
+
+            return Ok(UintOrVec::Vec(sliced_values))
+        } else {
+            Err(PyTypeError::new_err("splinter indices must be integers or slices"))
         }
 
-        match self.0.select(actual_index as usize) {
-            Some(value) => Ok(value),
-            None => Err(pyo3::exceptions::PyIndexError::new_err( "splinter index out of range"))
-        }
     }
 
     #[staticmethod]
@@ -518,6 +568,12 @@ impl SplinterIter {
 pub enum BoolOrVec {
     Bool(bool),
     Vec(Vec<bool>),
+}
+
+#[derive(IntoPyObject)]
+pub enum UintOrVec {
+    U32(u32),
+    Vec(Vec<u32>),
 }
 
 #[pymodule]
