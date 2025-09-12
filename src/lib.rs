@@ -1,6 +1,6 @@
 use std::vec;
 
-use pyo3::{exceptions::PyValueError, prelude::*, types::{PyBytes, PyTuple, PyType}, PyTypeInfo};
+use pyo3::{exceptions::{PyTypeError, PyValueError}, prelude::*, types::{PyBytes, PyTuple, PyType}, PyTypeInfo};
 use rayon::prelude::*;
 use splinter_rs::{Cut, Encodable, Optimizable, PartitionRead, PartitionWrite, Splinter, SplinterRef};
 
@@ -126,7 +126,7 @@ impl SplinterWrapper {
 
             Ok(BoolOrVec::Vec(results))
         } else { 
-            Err(pyo3::exceptions::PyTypeError::new_err(
+            Err(PyTypeError::new_err(
                 format!(
                     "contains() argument must be an integer or a list of integers, but received an object of type {:#?}", 
                     value.get_type().name()?
@@ -192,7 +192,7 @@ impl SplinterWrapper {
             self.0.optimize();
             Ok(())
         } else {
-            Err(pyo3::exceptions::PyTypeError::new_err(
+            Err(PyTypeError::new_err(
                 format!(
                     "discard() argument must be an integer or a list of integers, but received an object of type {:#?}", 
                     values.get_type().name()?
@@ -242,7 +242,7 @@ impl SplinterWrapper {
             self.0.optimize();
             Ok(())
         } else { 
-            Err(pyo3::exceptions::PyTypeError::new_err(
+            Err(PyTypeError::new_err(
                 format!(
                     "discard() argument must be an integer or a list of integers, but received an object of type {:#?}", 
                     value.get_type().name()?
@@ -270,7 +270,7 @@ impl SplinterWrapper {
             self.0.optimize();
             Ok(())
         } else { 
-            Err(pyo3::exceptions::PyTypeError::new_err(
+            Err(PyTypeError::new_err(
                 format!(
                     "discard() argument must be an integer or a list of integers, but received an object of type {:#?}", 
                     value.get_type().name()?
@@ -299,7 +299,7 @@ impl SplinterWrapper {
             self.0.optimize();
             Ok(())
         } else {
-            Err(pyo3::exceptions::PyTypeError::new_err(
+            Err(PyTypeError::new_err(
                 format!(
                     "merge() argument must be a Splinter or a list of Splinters, but received an object of type {:#?}", 
                     splinters.get_type().name()?
@@ -354,13 +354,22 @@ impl SplinterWrapper {
                 Ok(self.0.select(index))
             } else { Ok(None) }
         } else {
-            Err(pyo3::exceptions::PyTypeError::new_err(
+            Err(PyTypeError::new_err(
                 format!(
                     "select() argument must be an integer, but received an object of type {:#?}",
                     idx.get_type().name()?
                 )
             ))
         }
+    }
+    
+    pub fn position(&self, value: u32) -> PyResult<usize> {
+        if let Some(pos) = self.0.position(value) {
+            Ok(pos)
+        } else {
+            Err(PyValueError::new_err(format!("element {value} does not exist in this Splinter")))
+        }
+
     }
 
     // basic bitwise set operators
