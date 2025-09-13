@@ -2,6 +2,12 @@
 name = "splynters"
 version = "0.1.0"
 edition = "2021"
+exclude = [
+  "benchmark_results/",
+  "benches/",
+  "python/",
+  "real_roaring_data/"
+]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
