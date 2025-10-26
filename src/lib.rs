@@ -91,7 +91,7 @@ impl SplinterWrapper {
                 });
             }
 
-            return Ok(UintOrVec::Vec(sliced_values))
+            Ok(UintOrVec::Vec(sliced_values))
         } else {
             Err(PyTypeError::new_err(
                 "splinter indices must be integers or slices"
@@ -112,8 +112,7 @@ impl SplinterWrapper {
         // `pyo3` automatically converts the Python list into a `Vec<u32>`.
         // `Splinter::from_iter` can then consume the vector 
         // directly via `into_iter`
-        let mut splinter = CowSplinter::from_iter(data);
-        splinter.to_mut().optimize();
+        let splinter = CowSplinter::from_iter(data);
 
         Self(splinter)
     }
@@ -189,6 +188,14 @@ impl SplinterWrapper {
         }
     }
 
+    /// Optimizes the memory footprint of the Splinter
+    ///
+    /// This operation is computationally expensive, and should be called 
+    /// before serializing data or after very large changes in order to 
+    /// reduce its size. However, it is not recommended to call this too 
+    /// frequently or as part of small changes.
+    pub fn optimize(&mut self) { self.0.to_mut().optimize(); }
+
     /// Checks if the bitmap contains multiple values in parallel.
     ///
     /// Note: 
@@ -237,13 +244,11 @@ impl SplinterWrapper {
     pub fn add(&mut self, values: &Bound<PyAny>) -> PyResult<()> {
         if let Ok(val) = values.extract::<u32>() {
             self.0.insert(val);
-            self.0.to_mut().optimize();
             Ok(())
         } else if let Ok(vals) = values.extract::<Vec<u32>>() {
             vals.iter().for_each(|val| {
                 self.0.insert(*val);
             });
-            self.0.to_mut().optimize();
             Ok(())
         } else {
             Err(PyTypeError::new_err(
@@ -271,8 +276,6 @@ impl SplinterWrapper {
                     )
                 ))
             } else {
-                // if we get to this point, the operation completed successfully, and we optimize
-                self.0.to_mut().optimize();
                 Ok(())
             }
         } else if let Ok(vals) = value.extract::<Vec<u32>>() {
@@ -292,8 +295,6 @@ impl SplinterWrapper {
             vals.iter().for_each(|val| {
                 self.0.remove(*val);
             });
-            // if we ge to this point, the operation completed successfully
-            self.0.to_mut().optimize();
             Ok(())
         } else { 
             Err(PyTypeError::new_err(
@@ -315,13 +316,11 @@ impl SplinterWrapper {
     pub fn discard(&mut self, value: &Bound<PyAny>) -> PyResult<()> {
         if let Ok(single_val) = value.extract::<u32>() {
             self.0.remove(single_val);
-            self.0.to_mut().optimize();
             Ok(())
         } else if let Ok(vals) = value.extract::<Vec<u32>>() {
             vals.iter().for_each(|val| {
                 self.0.remove(*val);
             });
-            self.0.to_mut().optimize();
             Ok(())
         } else { 
             Err(PyTypeError::new_err(
@@ -344,7 +343,6 @@ impl SplinterWrapper {
         if let Ok(rhs) = splinters.extract::<SplinterWrapper>() {
             // todo: ask Carl if this is kosher
             *self.0.to_mut() |= &rhs.0;
-            self.0.to_mut().optimize();
             Ok(())
         } else if let Ok(splinter_list) = splinters
             .extract::<Vec<SplinterWrapper>>() {
@@ -352,7 +350,6 @@ impl SplinterWrapper {
                 for rhs in splinter_list {
                     *self.0.to_mut() |= &rhs.0;
                 };
-                self.0.to_mut().optimize();
                 Ok(())
         } else {
             Err(PyTypeError::new_err(
