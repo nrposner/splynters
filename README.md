@@ -155,6 +155,23 @@ assert(not s1 >= s2) # s2 is not a subset of s1
 assert(not s1 > s2) # s2 is not a proper subset of s1
 ```
 
+### Compression Optimization
+
+A Splinter object can be further compressed to its minimum memory footprint using the `.optimize()` method.
+
+This operation is computationally expensive, so it should be called before serializing data or after very large changes in order to reduce size in memory. It is not recommended to call this in a tight loop or after small changes.
+
+```python
+data = [1, 5, 789423, 23]
+s = Spllinter.from_list(data)
+
+# ...
+# a lot of changes
+# ...
+
+s.optimize()
+```
+
 ### Serialization, Deserialization, and Pickling
 
 A Splinter object can be serialized to bytes using the `.to_bytes()` method, and deserialized using `.from_bytes()`.

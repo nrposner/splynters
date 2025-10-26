@@ -1,16 +1,14 @@
 use std::vec;
 
 use bytes::Bytes;
-use pyo3::{exceptions::{PyTypeError, PyValueError}, prelude::*, types::{PyBytes, PySlice, PyTuple, PyType}, PyTypeInfo};
+use pyo3::{
+    exceptions::{PyTypeError, PyValueError}, 
+    prelude::*, 
+    types::{PyBytes, PySlice, PyTuple, PyType}, 
+    PyTypeInfo
+};
 use rayon::prelude::*;
 use splinter_rs::{CowSplinter, Cut, Encodable, Optimizable, PartitionRead, PartitionWrite};
-
-#[derive(Clone)]
-pub enum SplinterType {
-    Splinter,
-    SplinterRef,
-    CowSplinter,
-}
 
 /// A wrapper for higher-order functionality over the Splinter 
 /// crate
@@ -28,7 +26,9 @@ impl SplinterWrapper {
     pub fn __len__(&self) -> usize { self.0.cardinality() }
     pub fn __sizeof__(&self) -> usize { self.0.encoded_size() }
     pub fn __repr__(&self) -> String {
-        let s = format!("SplinterWrapper(len = {}, compressed_byte_size = {})", self.0.cardinality(), self.0.encoded_size());
+        let s = format!("SplinterWrapper(len = {}, compressed_byte_size = {})",
+            self.0.cardinality(), 
+            self.0.encoded_size());
         s
     }
     fn __iter__(&self) -> SplinterIter {
@@ -36,7 +36,6 @@ impl SplinterWrapper {
             inner: self.0.iter().collect::<Vec<u32>>().into_iter(),
         }
     }
-
 
     /// Returns an element or list of elements based on the input index or slice
     ///
@@ -53,13 +52,17 @@ impl SplinterWrapper {
 
             match self.0.select(actual_index as usize) {
                 Some(value) => Ok(UintOrVec::U32(value)),
-                None => Err(pyo3::exceptions::PyIndexError::new_err( "splinter index out of range"))
+                None => Err(pyo3::exceptions::PyIndexError::new_err(
+                    "splinter index out of range"
+                ))
             }
         } else if let Ok(u_idx) = index.extract::<usize>() {
 
             match self.0.select(u_idx) {
                 Some(value) => Ok(UintOrVec::U32(value)),
-                None => Err(pyo3::exceptions::PyIndexError::new_err( "splinter index out of range"))
+                None => Err(pyo3::exceptions::PyIndexError::new_err(
+                    "splinter index out of range"
+                ))
             }
         } else if let Ok(slice) = index.downcast::<PySlice>() {
 
@@ -88,15 +91,11 @@ impl SplinterWrapper {
                 });
             }
 
-            // let start = indices.start as usize;
-            // let stop = indices.stop as usize;
-            // let step = indices.step as usize;
-
-            // let sliced_values: Vec<u32> = self.0.iter().skip(start).step_by(step).take((stop - start) / step + 1).collect();
-
-            return Ok(UintOrVec::Vec(sliced_values))
+            Ok(UintOrVec::Vec(sliced_values))
         } else {
-            Err(PyTypeError::new_err("splinter indices must be integers or slices"))
+            Err(PyTypeError::new_err(
+                "splinter indices must be integers or slices"
+            ))
         }
 
     }
@@ -111,9 +110,9 @@ impl SplinterWrapper {
     ///     Splinter: A Splinter object constructed from the input items
     pub fn from_list(data: Vec<u32>) -> Self {
         // `pyo3` automatically converts the Python list into a `Vec<u32>`.
-        // `Splinter::from_iter` can then consume the vector directly via `into_iter`
-        let mut splinter = CowSplinter::from_iter(data);
-        splinter.to_mut().optimize();
+        // `Splinter::from_iter` can then consume the vector 
+        // directly via `into_iter`
+        let splinter = CowSplinter::from_iter(data);
 
         Self(splinter)
     }
@@ -129,14 +128,16 @@ impl SplinterWrapper {
     /// Constructs a Splinter from raw byte data.
     ///
     /// Panics: 
-    ///     This method may cause a panic if the bytes are not formatted correctly.
-    ///     splinter-rs provides a checksum in the serialized data to protect against 
-    ///     corrupted or modified data, and will not cause any undefined behavior, but
-    ///     malicious input can cause a panic.
+    ///     This method may cause a panic if the bytes are not formatted 
+    ///     correctly. 
+    ///     splinter-rs provides a checksum in the serialized 
+    ///     data to protect against corrupted or modified data, and will 
+    ///     not cause any undefined behavior, but malicious input can 
+    ///     cause a panic. 
     ///     Only use this method on trusted data.
     ///
     /// Args:
-    ///     data array[byte]: The byte data from which to construct the Splinter.
+    ///     data array[byte]: The byte data used to construct the Splinter.
     ///
     /// Returns: 
     ///     Splinter: A Splinter object, or else an error explaining why
@@ -148,7 +149,9 @@ impl SplinterWrapper {
         // does this make us no longer zero-copy??
         let bytes = Bytes::copy_from_slice(data);
         let splinter = CowSplinter::from_bytes(bytes).map_err(|e| {
-            PyValueError::new_err(format!("Splinter could not be constructed from bytes: {e}"))
+            PyValueError::new_err(format!(
+                "Splinter could not be constructed from bytes: {e}"
+            ))
         })?;
 
         Ok(Self(splinter))
@@ -163,8 +166,8 @@ impl SplinterWrapper {
     ///     value (int | list[int]): The value or values to check for.
     ///
     /// Returns:
-    ///     bool | list[bool]: A single boolean if the input was a single integer,
-    ///     or a list of booleans if the input was a list.
+    ///     bool | list[bool]: A single boolean if the input was a single 
+    ///     integer, or a list of booleans if the input was a list.
     pub fn contains(&self, value: &Bound<PyAny>) -> PyResult<BoolOrVec> {
         if let Ok(single_val) = value.extract::<u32>() {
             let result = self.0.contains(single_val);
@@ -184,6 +187,14 @@ impl SplinterWrapper {
             ))
         }
     }
+
+    /// Optimizes the memory footprint of the Splinter
+    ///
+    /// This operation is computationally expensive, and should be called 
+    /// before serializing data or after very large changes in order to 
+    /// reduce its size. However, it is not recommended to call this too 
+    /// frequently or as part of small changes.
+    pub fn optimize(&mut self) { self.0.to_mut().optimize(); }
 
     /// Checks if the bitmap contains multiple values in parallel.
     ///
@@ -233,13 +244,11 @@ impl SplinterWrapper {
     pub fn add(&mut self, values: &Bound<PyAny>) -> PyResult<()> {
         if let Ok(val) = values.extract::<u32>() {
             self.0.insert(val);
-            self.0.to_mut().optimize();
             Ok(())
         } else if let Ok(vals) = values.extract::<Vec<u32>>() {
             vals.iter().for_each(|val| {
                 self.0.insert(*val);
             });
-            self.0.to_mut().optimize();
             Ok(())
         } else {
             Err(PyTypeError::new_err(
@@ -267,8 +276,6 @@ impl SplinterWrapper {
                     )
                 ))
             } else {
-                // if we get to this point, the operation completed successfully, and we optimize
-                self.0.to_mut().optimize();
                 Ok(())
             }
         } else if let Ok(vals) = value.extract::<Vec<u32>>() {
@@ -288,8 +295,6 @@ impl SplinterWrapper {
             vals.iter().for_each(|val| {
                 self.0.remove(*val);
             });
-            // if we ge to this point, the operation completed successfully
-            self.0.to_mut().optimize();
             Ok(())
         } else { 
             Err(PyTypeError::new_err(
@@ -311,13 +316,11 @@ impl SplinterWrapper {
     pub fn discard(&mut self, value: &Bound<PyAny>) -> PyResult<()> {
         if let Ok(single_val) = value.extract::<u32>() {
             self.0.remove(single_val);
-            self.0.to_mut().optimize();
             Ok(())
         } else if let Ok(vals) = value.extract::<Vec<u32>>() {
             vals.iter().for_each(|val| {
                 self.0.remove(*val);
             });
-            self.0.to_mut().optimize();
             Ok(())
         } else { 
             Err(PyTypeError::new_err(
@@ -340,15 +343,14 @@ impl SplinterWrapper {
         if let Ok(rhs) = splinters.extract::<SplinterWrapper>() {
             // todo: ask Carl if this is kosher
             *self.0.to_mut() |= &rhs.0;
-            self.0.to_mut().optimize();
             Ok(())
-        } else if let Ok(splinter_list) = splinters.extract::<Vec<SplinterWrapper>>() {
-            // is this kosher? likely a more effective way to do this, right??
-            for rhs in splinter_list {
-                *self.0.to_mut() |= &rhs.0;
-            };
-            self.0.to_mut().optimize();
-            Ok(())
+        } else if let Ok(splinter_list) = splinters
+            .extract::<Vec<SplinterWrapper>>() {
+                // is this kosher? likely a more effective way to do this, right??
+                for rhs in splinter_list {
+                    *self.0.to_mut() |= &rhs.0;
+                };
+                Ok(())
         } else {
             Err(PyTypeError::new_err(
                 format!(
@@ -359,51 +361,57 @@ impl SplinterWrapper {
         }
     }
 
-    // for cut, not currently enabling multiple sequential cuts, since it's not clear what the
-    // behavior on this is, and don't want to give the user a knife to cut themselves with
+    // for cut, not currently enabling multiple sequential cuts, since it's 
+    // not clear what the behavior on this is, and don't want to give the 
+    // user a knife to cut themselves with
     // todo: double check that this isn't terrible
 
     /// Removes and returns the intersection between self and splinter.
     ///
-    /// If self and splinter have no overlap, it returns an empty Splinter and does not modify
-    /// self. Otherwise, any elements in common between the two will be removed from self and
-    /// returned to the caller.
+    /// If self and splinter have no overlap, it returns an empty Splinter 
+    /// and does not modify self. Otherwise, any elements in common between 
+    /// the two will be removed from self and returned to the caller.
     ///
     /// Args:
     ///     splinter Splinter: A Splinter object to intersect with
     ///
     /// Returns: 
     ///     Splinter
-    pub fn cut(&mut self, rhs: SplinterWrapper) -> Self { Self(CowSplinter::from_owned(self.0.to_mut().cut(&rhs.0)))}
+    pub fn cut(&mut self, rhs: SplinterWrapper) -> Self { 
+        Self(CowSplinter::from_owned(self.0.to_mut().cut(&rhs.0)))
+    }
 
-    /// Returns the number of elements in the Splinter that are less than or equal to the given
-    /// value.
+    /// Returns the number of elements in the Splinter that are less than 
+    /// or equal to the given value.
     ///
     /// Args:
     ///     value int: the value to compare against. Cannot be negative
     ///
     /// Returns:
-    ///     int: an integer indicating the number of elements less than or equalt to the given
-    ///     value
+    ///     int: an integer indicating the number of elements less than or 
+    ///     equal to the given value
     pub fn rank(&self, value: u32) -> usize { self.0.rank(value) }
 
-    // sugar over this to allow selecting using the [] notation, including negative indices??
+    // sugar over this to allow selecting using the [] notation, 
+    // including negative indices??
 
-    /// Returns the element at the given index in the sorted sequence, or None if it is out of
-    /// bounds.
+    /// Returns the element at the given index in the sorted sequence, 
+    /// or None if it is out of bounds.
     ///
     /// Args: 
-    ///     idx int: the index of the sequence to grab. Negative indices count back
-    ///     from the end.
+    ///     idx int: the index of the sequence to grab. Negative indices 
+    ///     count back from the end.
     ///
     /// Returns: 
-    ///     (int | None): the element at the relevant index, or else a None if overflowed
+    ///     (int | None): the element at the relevant index, or else a 
+    ///     None if overflowed
     pub fn select(&self, idx: &Bound<PyAny>) -> PyResult<Option<u32>> {
         if let Ok(val) = idx.extract::<usize>() {
             Ok(self.0.select(val))
         } else if let Ok(val) = idx.extract::<isize>() {
-            if let Some(index) = self.0.cardinality().checked_sub(val as usize) {
-                Ok(self.0.select(index))
+            if let Some(index) = self.0.cardinality()
+                .checked_sub(val as usize) {
+                    Ok(self.0.select(index))
             } else { Ok(None) }
         } else {
             Err(PyTypeError::new_err(
@@ -447,9 +455,13 @@ impl SplinterWrapper {
     fn __eq__(&self, rhs: &Self) -> bool { self.0 == rhs.0 }
     fn __ne__(&self, rhs: &Self) -> bool { self.0 != rhs.0 }
     fn __le__(&self, rhs: &Self) -> bool { (&self.0 & &rhs.0) == self.0 }
-    fn __lt__(&self, rhs: &Self) -> bool { (self.0.cardinality() < rhs.0.cardinality()) && self.__le__(rhs) }
+    fn __lt__(&self, rhs: &Self) -> bool { 
+        (self.0.cardinality() < rhs.0.cardinality()) && self.__le__(rhs) 
+    }
     fn __ge__(&self, rhs: &Self) -> bool { (&self.0 & &rhs.0) == rhs.0 }
-    fn __gt__(&self, rhs: &Self) -> bool { self.0.cardinality() > rhs.0.cardinality() &&  self.__ge__(rhs) }
+    fn __gt__(&self, rhs: &Self) -> bool { 
+        self.0.cardinality() > rhs.0.cardinality() &&  self.__ge__(rhs) 
+    }
 
     // for serialization with pickle
     fn __getstate__(&self, py: Python) -> PyObject {
@@ -458,14 +470,21 @@ impl SplinterWrapper {
     }
     // for deserializing from pickle
     fn __setstate__(&mut self, bytes: &[u8]) -> PyResult<()> {
-        self.0 = CowSplinter::from_bytes(Bytes::copy_from_slice(bytes)).map_err(|e| {
-            PyValueError::new_err(format!("Failed to deserialize Splinter from bytes: {e}"))
+        self.0 = CowSplinter::from_bytes(
+                Bytes::copy_from_slice(bytes)
+        ).map_err(|e| {
+            PyValueError::new_err(format!(
+                "Failed to deserialize Splinter from bytes: {e}"
+            ))
         })?;
         Ok(())
     }
 
     /// tells pickle how to find the class and serialize it
-    fn __reduce__<'py>(&self, py: Python<'py>,) -> (PyObject, PyObject, PyObject) {
+    fn __reduce__<'py>(
+        &self, 
+        py: Python<'py>
+    ) -> (PyObject, PyObject, PyObject) {
         let class = Self::type_object(py).into();
         let args = PyTuple::empty(py).into();
         let state = self.__getstate__(py);
