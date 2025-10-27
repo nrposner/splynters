@@ -163,7 +163,7 @@ This operation is computationally expensive, so it should be called before seria
 
 ```python
 data = [1, 5, 789423, 23]
-s = Spllinter.from_list(data)
+s = Splinter.from_list(data)
 
 # ...
 # a lot of changes
