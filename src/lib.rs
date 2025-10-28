@@ -64,7 +64,7 @@ impl SplinterWrapper {
                     "splinter index out of range"
                 ))
             }
-        } else if let Ok(slice) = index.downcast::<PySlice>() {
+        } else if let Ok(slice) = index.cast::<PySlice>() {
 
             let len = self.0.cardinality() as isize;
             let indices = slice.indices(len)?;
@@ -464,7 +464,7 @@ impl SplinterWrapper {
     }
 
     // for serialization with pickle
-    fn __getstate__(&self, py: Python) -> PyObject {
+    fn __getstate__(&self, py: Python) -> Py<PyAny> {
         let bytes = self.to_bytes(py);
         bytes.into()
     }
@@ -484,7 +484,7 @@ impl SplinterWrapper {
     fn __reduce__<'py>(
         &self, 
         py: Python<'py>
-    ) -> (PyObject, PyObject, PyObject) {
+    ) -> (Py<PyAny>, Py<PyAny>, Py<PyAny>) {
         let class = Self::type_object(py).into();
         let args = PyTuple::empty(py).into();
         let state = self.__getstate__(py);
