@@ -1,4 +1,4 @@
-# Splynters
+# Splynters v0.1.2
 ## A Python package for efficient compression of sparse bitmaps
 
 Splynters is a Python wrapping over the [splinter-rs](https://github.com/orbitinghail/splinter-rs) library for zero-copy querying of compressed bitmaps. 
